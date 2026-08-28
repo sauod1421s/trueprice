@@ -19,14 +19,17 @@ export type Product = {
   memory: string
   storage: string
 
-  offers: PriceOffer[]
+  battery?: string
+  waterResistance?: string
+  colors?: string[]
+  amazonUrl?: string
 
+  offers: PriceOffer[]
   price: number | null
   prices: number[]
   averagePrice: number | null
   lowestPrice: number | null
   highestPrice: number | null
   fairPrice: number | null
-
   confidence: number
 }

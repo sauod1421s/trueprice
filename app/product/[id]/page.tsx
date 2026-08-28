@@ -2,6 +2,51 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import products from "../../data/products";
 
+type PageOffer = {
+  store: string;
+  storeAr: string;
+  price: number | null;
+  url: string;
+  available?: boolean;
+  verified?: boolean;
+  isVerified?: boolean;
+  checkedAt?: string | null;
+};
+
+type ProductPageProduct = {
+  id: number;
+  name: string;
+  nameAr: string;
+  brand: string;
+  brandAr: string;
+  category: string;
+  categoryAr: string;
+  memory: string;
+  storage: string;
+  offers: PageOffer[];
+  price: number | null;
+  prices: number[];
+  averagePrice: number | null;
+  lowestPrice: number | null;
+  highestPrice: number | null;
+  fairPrice: number | null;
+  confidence: number;
+
+  screen?: string | null;
+  chip?: string | null;
+  camera?: string | null;
+  frontCamera?: string | null;
+  battery?: string | null;
+  connectivity?: string | null;
+  waterResistance?: string | null;
+  refreshRate?: string | null;
+  colors?: string[];
+  description?: string | null;
+  lastUpdated?: string | null;
+  store?: string | null;
+  amazonUrl?: string | null;
+};
+
 type PageProps = {
   params: Promise<{
     id: string;
@@ -11,18 +56,23 @@ type PageProps = {
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
 
-  const product = products.find((item) => item.id === Number(id));
+  const product = products.find(
+    (item) => item.id === Number(id)
+  ) as ProductPageProduct | undefined;
 
   if (!product) {
     notFound();
   }
 
-  const saving = Math.max(
-    0,
-    product.price - product.fairPrice
-  );
+  const currentPrice = product.price ?? 0;
+  const fairPrice = product.fairPrice ?? 0;
 
-  const isGoodPrice = product.price <= product.fairPrice;
+  const saving = Math.max(0, currentPrice - fairPrice);
+
+  const isGoodPrice =
+    product.price !== null &&
+    product.fairPrice !== null &&
+    product.price <= product.fairPrice;
 
   return (
     <main
@@ -102,7 +152,7 @@ export default async function ProductPage({ params }: PageProps) {
                   color: "#111827",
                 }}
               >
-                {product.nameAr}
+                {product.nameAr || product.name}
               </h1>
 
               <div
@@ -114,16 +164,15 @@ export default async function ProductPage({ params }: PageProps) {
                 }}
               >
                 <span style={tagStyle}>
-                  {product.categoryAr}
+                  {product.categoryAr || product.category}
                 </span>
 
-                <span style={tagStyle}>
-                  {product.storage}
-                </span>
+                {product.storage && (
+                  <span style={tagStyle}>{product.storage}</span>
+                )}
 
                 {product.memory &&
-                  product.memory !==
-                    "غير معلن رسميًا من Apple" && (
+                  product.memory !== "غير معلن رسميًا من Apple" && (
                     <span style={tagStyle}>
                       RAM {product.memory}
                     </span>
@@ -159,7 +208,9 @@ export default async function ProductPage({ params }: PageProps) {
                   lineHeight: "1.2",
                 }}
               >
-                {product.price.toLocaleString("en-US")}
+                {product.price !== null
+                  ? product.price.toLocaleString("en-US")
+                  : "غير متوفر"}
               </div>
 
               <div
@@ -209,11 +260,18 @@ export default async function ProductPage({ params }: PageProps) {
             style={{
               borderRadius: "18px",
               padding: "22px",
-              background: isGoodPrice
-                ? "#ecfdf5"
-                : "#fff7ed",
+              background:
+                product.price !== null && product.fairPrice !== null
+                  ? isGoodPrice
+                    ? "#ecfdf5"
+                    : "#fff7ed"
+                  : "#f9fafb",
               border: `1px solid ${
-                isGoodPrice ? "#bbf7d0" : "#fed7aa"
+                product.price !== null && product.fairPrice !== null
+                  ? isGoodPrice
+                    ? "#bbf7d0"
+                    : "#fed7aa"
+                  : "#e5e7eb"
               }`,
               marginBottom: "18px",
             }}
@@ -232,9 +290,13 @@ export default async function ProductPage({ params }: PageProps) {
                   style={{
                     fontSize: "16px",
                     fontWeight: "800",
-                    color: isGoodPrice
-                      ? "#15803d"
-                      : "#c2410c",
+                    color:
+                      product.price !== null &&
+                      product.fairPrice !== null
+                        ? isGoodPrice
+                          ? "#15803d"
+                          : "#c2410c"
+                        : "#6b7280",
                     marginBottom: "7px",
                   }}
                 >
@@ -245,12 +307,17 @@ export default async function ProductPage({ params }: PageProps) {
                   style={{
                     fontSize: "clamp(28px, 5vw, 38px)",
                     fontWeight: "900",
-                    color: isGoodPrice
-                      ? "#15803d"
-                      : "#c2410c",
+                    color:
+                      product.fairPrice !== null
+                        ? isGoodPrice
+                          ? "#15803d"
+                          : "#c2410c"
+                        : "#6b7280",
                   }}
                 >
-                  {product.fairPrice.toLocaleString("en-US")} ريال
+                  {product.fairPrice !== null
+                    ? `${product.fairPrice.toLocaleString("en-US")} ريال`
+                    : "غير متوفر"}
                 </div>
               </div>
 
@@ -262,28 +329,38 @@ export default async function ProductPage({ params }: PageProps) {
                   color: "#374151",
                 }}
               >
-                {isGoodPrice ? (
-                  <>
-                    <strong style={{ color: "#15803d" }}>
-                      ✅ سعر مناسب
-                    </strong>
-                    <br />
-                    السعر الحالي ضمن السعر العادل.
-                  </>
+                {product.price !== null && product.fairPrice !== null ? (
+                  isGoodPrice ? (
+                    <>
+                      <strong style={{ color: "#15803d" }}>
+                        ✅ سعر مناسب
+                      </strong>
+                      <br />
+                      السعر الحالي ضمن السعر العادل.
+                    </>
+                  ) : (
+                    <>
+                      <strong style={{ color: "#c2410c" }}>
+                        ⚠️ السعر أعلى من العادل
+                      </strong>
+                      <br />
+                      حاول الحصول على سعر أقل.
+                    </>
+                  )
                 ) : (
                   <>
-                    <strong style={{ color: "#c2410c" }}>
-                      ⚠️ السعر أعلى من العادل
+                    <strong style={{ color: "#6b7280" }}>
+                      ℹ️ لا تتوفر بيانات كافية
                     </strong>
                     <br />
-                    حاول الحصول على سعر أقل.
+                    لا يمكن تحديد حالة السعر حاليًا.
                   </>
                 )}
               </div>
             </div>
           </div>
 
-          {/* التوفير والثقة */}
+          {/* التوفير والثقة والمتجر */}
           <div
             style={{
               display: "grid",
@@ -310,7 +387,7 @@ export default async function ProductPage({ params }: PageProps) {
 
             <InfoBox
               title="🏪 المتجر"
-              value={product.store}
+              value={getMainStore(product)}
               color="#111827"
             />
           </div>
@@ -348,12 +425,24 @@ export default async function ProductPage({ params }: PageProps) {
           >
             <Spec title="الشاشة" value={product.screen} />
             <Spec title="المعالج" value={product.chip} />
-            <Spec title="الكاميرا الخلفية" value={product.camera} />
-            <Spec title="الكاميرا الأمامية" value={product.frontCamera} />
+            <Spec
+              title="الكاميرا الخلفية"
+              value={product.camera}
+            />
+            <Spec
+              title="الكاميرا الأمامية"
+              value={product.frontCamera}
+            />
             <Spec title="الذاكرة" value={product.memory} />
-            <Spec title="السعة التخزينية" value={product.storage} />
+            <Spec
+              title="السعة التخزينية"
+              value={product.storage}
+            />
             <Spec title="البطارية" value={product.battery} />
-            <Spec title="الاتصال" value={product.connectivity} />
+            <Spec
+              title="الاتصال"
+              value={product.connectivity}
+            />
             <Spec
               title="مقاومة الماء والغبار"
               value={product.waterResistance}
@@ -393,7 +482,7 @@ export default async function ProductPage({ params }: PageProps) {
                 gap: "10px",
               }}
             >
-              {product.colors.map((color) => (
+              {product.colors.map((color: string) => (
                 <span
                   key={color}
                   style={{
@@ -466,86 +555,102 @@ export default async function ProductPage({ params }: PageProps) {
             أفضل الأسعار المتاحة
           </h2>
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-            }}
-          >
-            {product.offers.map((offer, index) => (
-              <div
-                key={`${offer.store}-${index}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "18px",
-                  flexWrap: "wrap",
-                  padding: "18px",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "16px",
-                  background: "#fafafa",
-                }}
-              >
-                <div style={{ minWidth: "180px" }}>
-                  <div
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "800",
-                      color: "#111827",
-                    }}
-                  >
-                    {offer.storeAr || offer.store}
-                  </div>
-
-                  {offer.isVerified && (
-                    <div
-                      style={{
-                        color: "#16a34a",
-                        fontSize: "14px",
-                        marginTop: "5px",
-                        fontWeight: "700",
-                      }}
-                    >
-                      ✓ متجر موثق
-                    </div>
-                  )}
-                </div>
-
+          {product.offers.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              {product.offers.map((offer, index) => (
                 <div
+                  key={`${offer.store}-${index}`}
                   style={{
-                    fontSize: "23px",
-                    fontWeight: "900",
-                    color: "#2563eb",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "18px",
+                    flexWrap: "wrap",
+                    padding: "18px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "16px",
+                    background: "#fafafa",
                   }}
                 >
-                  {offer.price.toLocaleString("en-US")} ريال
-                </div>
+                  <div style={{ minWidth: "180px" }}>
+                    <div
+                      style={{
+                        fontSize: "18px",
+                        fontWeight: "800",
+                        color: "#111827",
+                      }}
+                    >
+                      {offer.storeAr || offer.store}
+                    </div>
 
-                {offer.url && (
-                  <a
-                    href={offer.url}
-                    target="_blank"
-                    rel="noopener noreferrer sponsored"
+                    {(offer.verified ?? offer.isVerified) && (
+                      <div
+                        style={{
+                          color: "#16a34a",
+                          fontSize: "14px",
+                          marginTop: "5px",
+                          fontWeight: "700",
+                        }}
+                      >
+                        ✓ متجر موثق
+                      </div>
+                    )}
+                  </div>
+
+                  <div
                     style={{
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      padding: "12px 22px",
-                      borderRadius: "10px",
-                      textDecoration: "none",
-                      fontWeight: "800",
-                      fontSize: "15px",
-                      minWidth: "130px",
-                      textAlign: "center",
+                      fontSize: "23px",
+                      fontWeight: "900",
+                      color: "#2563eb",
                     }}
                   >
-                    الانتقال للمتجر →
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
+                    {offer.price !== null
+                      ? `${offer.price.toLocaleString("en-US")} ريال`
+                      : "غير متوفر"}
+                  </div>
+
+                  {offer.url && (
+                    <a
+                      href={offer.url}
+                      target="_blank"
+                      rel="noopener noreferrer sponsored"
+                      style={{
+                        background: "#2563eb",
+                        color: "#ffffff",
+                        padding: "12px 22px",
+                        borderRadius: "10px",
+                        textDecoration: "none",
+                        fontWeight: "800",
+                        fontSize: "15px",
+                        minWidth: "130px",
+                        textAlign: "center",
+                      }}
+                    >
+                      الانتقال للمتجر →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "30px 15px",
+                color: "#6b7280",
+                background: "#f9fafb",
+                borderRadius: "16px",
+              }}
+            >
+              لا توجد عروض متاحة حاليًا.
+            </div>
+          )}
         </section>
 
         {/* زر أمازون */}
@@ -582,8 +687,7 @@ export default async function ProductPage({ params }: PageProps) {
             padding: "10px",
           }}
         >
-          آخر تحديث:{" "}
-          {product.lastUpdated || "غير محدد"}
+          آخر تحديث: {product.lastUpdated || "غير محدد"}
         </div>
       </div>
     </main>
@@ -591,7 +695,27 @@ export default async function ProductPage({ params }: PageProps) {
 }
 
 /* =========================
-   مكونات صغيرة
+   دوال مساعدة
+========================= */
+
+function getMainStore(product: ProductPageProduct): string {
+  if (product.store) {
+    return product.store;
+  }
+
+  if (product.offers && product.offers.length > 0) {
+    return (
+      product.offers[0].storeAr ||
+      product.offers[0].store ||
+      "غير محدد"
+    );
+  }
+
+  return "غير محدد";
+}
+
+/* =========================
+   PriceBox
 ========================= */
 
 function PriceBox({
@@ -600,7 +724,7 @@ function PriceBox({
   color,
 }: {
   title: string;
-  value: number;
+  value: number | null | undefined;
   color: string;
 }) {
   return (
@@ -633,21 +757,29 @@ function PriceBox({
           color,
         }}
       >
-        {value.toLocaleString("en-US")}
+        {value !== null && value !== undefined
+          ? value.toLocaleString("en-US")
+          : "غير متوفر"}
       </div>
 
-      <div
-        style={{
-          marginTop: "3px",
-          fontSize: "13px",
-          color: "#6b7280",
-        }}
-      >
-        ريال
-      </div>
+      {value !== null && value !== undefined && (
+        <div
+          style={{
+            marginTop: "3px",
+            fontSize: "13px",
+            color: "#6b7280",
+          }}
+        >
+          ريال
+        </div>
+      )}
     </div>
   );
 }
+
+/* =========================
+   InfoBox
+========================= */
 
 function InfoBox({
   title,
@@ -693,12 +825,16 @@ function InfoBox({
   );
 }
 
+/* =========================
+   Spec
+========================= */
+
 function Spec({
   title,
   value,
 }: {
   title: string;
-  value?: string;
+  value?: string | null;
 }) {
   if (!value) return null;
 
@@ -735,6 +871,10 @@ function Spec({
     </div>
   );
 }
+
+/* =========================
+   Tag
+========================= */
 
 const tagStyle: React.CSSProperties = {
   background: "#eff6ff",
