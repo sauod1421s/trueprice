@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-
 declare global {
   interface Window {
     truePriceRecordStoreVisit?: () => void;
   }
 }
+
+import { useEffect, useState, type CSSProperties } from "react";
 
 const popularProducts = [
   "iPhone 17",
@@ -18,13 +18,38 @@ const popularProducts = [
   "Nintendo Switch 2",
 ];
 
-const navLinkStyle: CSSProperties = {
-  color: "#fff",
-  fontSize: "18px",
-  fontWeight: "700",
-  textDecoration: "none",
-  cursor: "pointer",
-};
+const carBrands = [
+  {
+    name: "Toyota",
+    nameAr: "تويوتا",
+    description: "أسعار ومواصفات سيارات تويوتا في السعودية",
+    initial: "T",
+  },
+  {
+    name: "Hyundai",
+    nameAr: "هيونداي",
+    description: "أسعار ومواصفات سيارات هيونداي في السعودية",
+    initial: "H",
+  },
+  {
+    name: "Kia",
+    nameAr: "كيا",
+    description: "أسعار ومواصفات سيارات كيا في السعودية",
+    initial: "K",
+  },
+  {
+    name: "Nissan",
+    nameAr: "نيسان",
+    description: "أسعار ومواصفات سيارات نيسان في السعودية",
+    initial: "N",
+  },
+  {
+    name: "MG",
+    nameAr: "MG",
+    description: "أسعار ومواصفات سيارات MG في السعودية",
+    initial: "MG",
+  },
+];
 
 export default function Home() {
   const [search, setSearch] = useState("");
@@ -35,6 +60,7 @@ export default function Home() {
     const savedSearches = Number(
       localStorage.getItem("trueprice_searches") || "0"
     );
+
     const savedStoreVisits = Number(
       localStorage.getItem("trueprice_store_visits") || "0"
     );
@@ -46,6 +72,7 @@ export default function Home() {
       const current = Number(
         localStorage.getItem("trueprice_store_visits") || "0"
       );
+
       const next = current + 1;
 
       localStorage.setItem("trueprice_store_visits", String(next));
@@ -57,6 +84,7 @@ export default function Home() {
     const current = Number(
       localStorage.getItem("trueprice_searches") || "0"
     );
+
     const next = current + 1;
 
     localStorage.setItem("trueprice_searches", String(next));
@@ -70,8 +98,17 @@ export default function Home() {
 
     recordSearch();
 
-    const encoded = encodeURIComponent(value);
-    window.location.assign(`/search?q=${encoded}`);
+    window.location.assign(
+      `/search?q=${encodeURIComponent(value)}`
+    );
+  }
+
+  function searchPopularProduct(product: string) {
+    recordSearch();
+
+    window.location.assign(
+      `/search?q=${encodeURIComponent(product)}`
+    );
   }
 
   return (
@@ -79,223 +116,609 @@ export default function Home() {
       dir="rtl"
       style={{
         minHeight: "100vh",
-        background: "#050505",
-        color: "#fff",
-        fontFamily: "Arial, sans-serif",
+        background: "#080D14",
+        color: "#F8FAFC",
+        fontFamily:
+          '"Cairo", "IBM Plex Sans Arabic", Arial, sans-serif',
         overflowX: "hidden",
       }}
     >
+      {/* ================= HEADER ================= */}
+
       <header
         style={{
-          background: "#2563eb",
-          padding: "22px 7%",
           position: "sticky",
           top: 0,
-          zIndex: 100,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+          zIndex: 50,
+          background: "rgba(14,22,33,0.90)",
+          backdropFilter: "blur(18px)",
+          borderBottom: "1px solid #243244",
         }}
       >
         <div
+          className="tp-header-inner"
           style={{
-            maxWidth: "1200px",
+            maxWidth: "1280px",
             margin: "auto",
+            padding: "13px 24px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "25px",
-            flexWrap: "wrap",
+            gap: "20px",
           }}
         >
           <a
             href="#home"
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
               textDecoration: "none",
-              color: "#fff",
-              textAlign: "right",
+              color: "#F8FAFC",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "38px",
-                fontWeight: "800",
-                lineHeight: 1,
+                width: "40px",
+                height: "40px",
+                borderRadius: "12px",
+                background:
+                  "linear-gradient(135deg,#10B981,#047857)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                fontSize: "21px",
+                fontWeight: 900,
+                boxShadow:
+                  "0 8px 20px rgba(5,150,105,0.20)",
               }}
             >
-              TruePrice
+              ✦
             </div>
 
-            <div
-              style={{
-                fontSize: "16px",
-                marginTop: "8px",
-                opacity: 0.9,
-              }}
-            >
-              المرجع الذكي للأسعار
+            <div style={{ lineHeight: 1.1 }}>
+              <div
+                style={{
+                  fontSize: "17px",
+                  fontWeight: 900,
+                  letterSpacing: "-0.4px",
+                }}
+              >
+                TruePrice
+              </div>
+
+              <div
+                style={{
+                  fontSize: "10px",
+                  color: "#A7B4C5",
+                  marginTop: "4px",
+                  fontWeight: 600,
+                }}
+              >
+                ذكاء الأسعار
+              </div>
             </div>
           </a>
 
           <nav
+            className="tp-main-nav"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "35px",
-              flexWrap: "wrap",
+              gap: "5px",
             }}
           >
-            <a href="#home" style={navLinkStyle}>
+            <a href="#home" style={headerLinkStyle}>
               الرئيسية
             </a>
 
-            <a href="#how-it-works" style={navLinkStyle}>
+            <a href="/search" style={headerLinkStyle}>
+              المنتجات
+            </a>
+
+            <a
+              href="/cars"
+              style={{
+                ...headerLinkStyle,
+                color: "#6EE7B7",
+                background: "rgba(16,185,129,0.12)",
+              }}
+            >
+              <span style={{ fontSize: "15px" }}>🚗</span>
+              السيارات
+            </a>
+
+            <a
+              href="#how-it-works"
+              style={headerLinkStyle}
+            >
               كيف يعمل؟
             </a>
 
-            <a href="#about" style={navLinkStyle}>
+            <a href="#about" style={headerLinkStyle}>
               عن TruePrice
             </a>
           </nav>
+
+          <a
+            href="/search"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              background: "#172332",
+              color: "white",
+              padding: "10px 15px",
+              borderRadius: "10px",
+              textDecoration: "none",
+              fontSize: "13px",
+              fontWeight: 700,
+              flexShrink: 0,
+              border: "1px solid #243244",
+            }}
+          >
+            <span>⌕</span>
+            بحث
+          </a>
         </div>
       </header>
+
+      {/* ================= HERO ================= */}
 
       <section
         id="home"
         style={{
-          maxWidth: "1100px",
-          margin: "auto",
-          padding: "90px 25px 60px",
+          position: "relative",
+          overflow: "hidden",
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(5,150,105,0.12), transparent 60%), radial-gradient(ellipse 60% 40% at 90% 10%, rgba(30,64,175,0.08), transparent 60%)",
+          padding: "95px 24px 70px",
           textAlign: "center",
-          scrollMarginTop: "120px",
         }}
       >
         <div
           style={{
-            display: "inline-block",
-            padding: "10px 22px",
-            borderRadius: "30px",
-            background: "#07162d",
-            color: "#60a5fa",
-            fontSize: "18px",
-            marginBottom: "25px",
+            position: "absolute",
+            inset: 0,
+            opacity: 0.55,
+            backgroundImage:
+              "linear-gradient(rgba(148,163,184,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.045) 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+            pointerEvents: "none",
           }}
-        >
-          قارن قبل أن تشتري
-        </div>
-
-        <h1
-          style={{
-            fontSize: "72px",
-            margin: "0 0 20px",
-            fontWeight: "800",
-          }}
-        >
-          TruePrice
-        </h1>
-
-        <p
-          style={{
-            color: "#aaa",
-            fontSize: "26px",
-            margin: "0 0 45px",
-          }}
-        >
-          اعرف السعر الحقيقي قبل أن تشتري
-        </p>
+        />
 
         <div
           style={{
-            maxWidth: "850px",
+            position: "relative",
+            maxWidth: "950px",
             margin: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            padding: "8px",
-            border: "2px solid #444",
-            borderRadius: "22px",
-            background: "#101010",
           }}
         >
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                goToSearch();
-              }
-            }}
-            placeholder="ابحث عن أي منتج..."
+          <div
             style={{
-              flex: 1,
-              minWidth: 0,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "#fff",
-              fontSize: "20px",
-              padding: "18px",
-              textAlign: "right",
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={goToSearch}
-            style={{
-              background: "#16a34a",
-              color: "#fff",
-              border: "none",
-              borderRadius: "16px",
-              padding: "18px 35px",
-              fontSize: "20px",
-              fontWeight: "700",
-              cursor: "pointer",
-              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "9px",
+              padding: "8px 15px",
+              borderRadius: "999px",
+              background: "rgba(16,185,129,0.12)",
+              border: "1px solid rgba(16,185,129,0.30)",
+              color: "#6EE7B7",
+              fontSize: "13px",
+              fontWeight: 800,
+              marginBottom: "24px",
             }}
           >
-            بحث
-          </button>
-        </div>
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#10B981",
+                boxShadow:
+                  "0 0 0 4px rgba(16,185,129,0.15)",
+              }}
+            />
 
-        <p
-          style={{
-            color: "#666",
-            fontSize: "16px",
-            marginTop: "15px",
-          }}
-        >
-          مثال: ايفون 17 أو iPhone 17 أو Galaxy S25 Ultra
-        </p>
+            منصة سعودية مستقلة لذكاء الأسعار
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(44px, 7vw, 78px)",
+              lineHeight: 1.05,
+              fontWeight: 900,
+              letterSpacing: "-2px",
+              color: "#F8FAFC",
+            }}
+          >
+            اعرف{" "}
+            <span
+              style={{
+                background:
+                  "linear-gradient(135deg,#059669,#10B981)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              السعر الحقيقي
+            </span>
+            <br />
+            قبل أن تشتري
+          </h1>
+
+          <p
+            style={{
+              maxWidth: "650px",
+              margin: "22px auto 35px",
+              color: "#A7B4C5",
+              fontSize: "18px",
+              lineHeight: 1.9,
+            }}
+          >
+            قارن الأسعار، افهم السوق، واكتشف السعر العادل
+            للمنتج أو السيارة قبل اتخاذ قرار الشراء.
+          </p>
+
+          {/* SEARCH */}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              goToSearch();
+            }}
+            style={{
+              maxWidth: "850px",
+              margin: "auto",
+              display: "flex",
+              alignItems: "stretch",
+              background: "#0E1621",
+              border: "1px solid #243244",
+              borderRadius: "18px",
+              overflow: "hidden",
+              boxShadow:
+                "0 20px 50px -25px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "0 18px",
+                color: "#8FA0B5",
+                fontSize: "25px",
+              }}
+            >
+              ⌕
+            </div>
+
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث عن أي منتج... مثال: ايفون 17"
+              aria-label="البحث عن منتج"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                color: "#F8FAFC",
+                fontSize: "16px",
+                padding: "19px 5px",
+                textAlign: "right",
+                fontFamily: "inherit",
+              }}
+            />
+
+            <button
+              type="submit"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                border: "none",
+                background: "#059669",
+                color: "white",
+                padding: "0 25px",
+                fontSize: "15px",
+                fontWeight: 800,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              بحث
+              <span style={{ fontSize: "18px" }}>←</span>
+            </button>
+          </form>
+
+          <div
+            style={{
+              marginTop: "15px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap",
+              color: "#8FA0B5",
+              fontSize: "12px",
+            }}
+          >
+            <span>أمثلة:</span>
+
+            {popularProducts.slice(0, 4).map((product) => (
+              <button
+                key={product}
+                type="button"
+                onClick={() =>
+                  searchPopularProduct(product)
+                }
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#6EE7B7",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {product}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
+
+      {/* ================= STATS ================= */}
 
       <section
         style={{
-          maxWidth: "820px",
-          margin: "0 auto 70px",
-          padding: "0 25px",
+          maxWidth: "1050px",
+          margin: "-15px auto 80px",
+          padding: "0 24px",
+          position: "relative",
         }}
       >
         <div
-          className="trueprice-stats"
+          className="trueprice-home-stats"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: "10px",
+            gridTemplateColumns:
+              "repeat(4,minmax(0,1fr))",
+            gap: "12px",
           }}
         >
-          <StatCard number="35" title="منتج" />
-          <StatCard number="16" title="متجر" />
-          <StatCard number={formatNumber(searchCount)} title="عملية بحث" />
-          <StatCard number={formatNumber(storeVisits)} title="زيارة متجر" />
+          <StatCard
+            icon="▥"
+            number="35"
+            title="منتج"
+          />
+
+          <StatCard
+            icon="▣"
+            number="16"
+            title="متجر"
+          />
+
+          <StatCard
+            icon="⌕"
+            number={formatNumber(searchCount)}
+            title="عملية بحث"
+          />
+
+          <StatCard
+            icon="↗"
+            number={formatNumber(storeVisits)}
+            title="زيارة متجر"
+          />
         </div>
       </section>
+
+      {/* ================= CARS ================= */}
+
+      <section
+        style={{
+          maxWidth: "1180px",
+          margin: "0 auto 100px",
+          padding: "0 24px",
+        }}
+      >
+        <div
+          style={{
+            borderRadius: "28px",
+            background:
+              "linear-gradient(135deg,#0F172A,#111827)",
+            color: "white",
+            padding: "45px",
+            overflow: "hidden",
+            position: "relative",
+            border: "1px solid #243244",
+            boxShadow:
+              "0 25px 60px rgba(0,0,0,0.25)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              width: "300px",
+              height: "300px",
+              borderRadius: "50%",
+              background:
+                "rgba(5,150,105,0.14)",
+              filter: "blur(40px)",
+              top: "-120px",
+              left: "-70px",
+            }}
+          />
+
+          <div
+            className="tp-cars-heading"
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "30px",
+              marginBottom: "30px",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  color: "#6EE7B7",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  marginBottom: "12px",
+                }}
+              >
+                🚗 قسم السيارات
+              </div>
+
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "clamp(28px,4vw,42px)",
+                  fontWeight: 900,
+                }}
+              >
+                مرجع أسعار السيارات
+              </h2>
+
+              <p
+                style={{
+                  margin: "10px 0 0",
+                  color: "#94A3B8",
+                  fontSize: "15px",
+                  lineHeight: 1.8,
+                  maxWidth: "600px",
+                }}
+              >
+                تعرّف على أسعار السيارات الجديدة في السعودية
+                وقارن الموديلات والفئات قبل التواصل مع الوكيل.
+              </p>
+            </div>
+
+            <a
+              href="/cars"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "7px",
+                color: "white",
+                background: "#059669",
+                textDecoration: "none",
+                padding: "12px 18px",
+                borderRadius: "11px",
+                fontSize: "13px",
+                fontWeight: 800,
+                flexShrink: 0,
+              }}
+            >
+              استعرض السيارات
+              <span>←</span>
+            </a>
+          </div>
+
+          <div
+            className="trueprice-car-brands"
+            style={{
+              position: "relative",
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(5,minmax(0,1fr))",
+              gap: "12px",
+            }}
+          >
+            {carBrands.map((brand) => (
+              <a
+                key={brand.name}
+                href={`/cars/${brand.name.toLowerCase()}`}
+                style={{
+                  textDecoration: "none",
+                  color: "white",
+                  background:
+                    "rgba(255,255,255,0.055)",
+                  border:
+                    "1px solid rgba(255,255,255,0.09)",
+                  borderRadius: "17px",
+                  padding: "20px 16px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "45px",
+                    height: "45px",
+                    borderRadius: "13px",
+                    background:
+                      "rgba(16,185,129,0.13)",
+                    border:
+                      "1px solid rgba(110,231,183,0.18)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#6EE7B7",
+                    fontSize:
+                      brand.initial.length > 1
+                        ? "12px"
+                        : "19px",
+                    fontWeight: 900,
+                    marginBottom: "15px",
+                  }}
+                >
+                  {brand.initial}
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "17px",
+                    fontWeight: 900,
+                  }}
+                >
+                  {brand.nameAr}
+                </div>
+
+                <div
+                  style={{
+                    color: "#94A3B8",
+                    fontSize: "11px",
+                    marginTop: "4px",
+                  }}
+                >
+                  {brand.name}
+                </div>
+
+                <div
+                  style={{
+                    color: "#64748B",
+                    fontSize: "10px",
+                    lineHeight: 1.7,
+                    marginTop: "10px",
+                  }}
+                >
+                  {brand.description}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= HOW IT WORKS ================= */}
 
       <section
         id="how-it-works"
         style={{
-          maxWidth: "1000px",
+          maxWidth: "1050px",
           margin: "0 auto 100px",
-          padding: "80px 25px 0",
-          scrollMarginTop: "120px",
+          padding: "0 24px",
+          scrollMarginTop: "100px",
         }}
       >
         <div
@@ -307,12 +730,14 @@ export default function Home() {
           <div
             style={{
               display: "inline-block",
-              color: "#60a5fa",
-              background: "#07162d",
-              padding: "9px 20px",
-              borderRadius: "30px",
-              marginBottom: "15px",
-              fontSize: "17px",
+              padding: "7px 14px",
+              borderRadius: "999px",
+              background: "rgba(16,185,129,0.12)",
+              border: "1px solid rgba(16,185,129,0.22)",
+              color: "#6EE7B7",
+              fontSize: "12px",
+              fontWeight: 800,
+              marginBottom: "13px",
             }}
           >
             طريقة العمل
@@ -320,8 +745,9 @@ export default function Home() {
 
           <h2
             style={{
-              fontSize: "42px",
+              fontSize: "36px",
               margin: 0,
+              fontWeight: 900,
             }}
           >
             كيف يعمل TruePrice؟
@@ -329,32 +755,34 @@ export default function Home() {
 
           <p
             style={{
-              color: "#777",
-              fontSize: "18px",
-              marginTop: "12px",
+              color: "#A7B4C5",
+              fontSize: "15px",
+              marginTop: "10px",
             }}
           >
-            أربع خطوات بسيطة لمعرفة السعر الحقيقي قبل الشراء
+            أربع خطوات بسيطة لمعرفة السعر قبل الشراء
           </p>
         </div>
 
         <div
+          className="trueprice-how-grid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: "18px",
+            gridTemplateColumns:
+              "repeat(4,minmax(0,1fr))",
+            gap: "14px",
           }}
         >
           <HowCard
             number="01"
             title="ابحث"
-            text="اكتب اسم المنتج الذي تريد معرفة سعره، سواء بالعربي أو بالإنجليزي."
+            text="اكتب اسم المنتج الذي تريد معرفة سعره، بالعربي أو بالإنجليزي."
           />
 
           <HowCard
             number="02"
             title="نقارن"
-            text="نقارن أسعار المنتج بين المتاجر المختلفة للحصول على صورة أوضح."
+            text="نقارن الأسعار بين المصادر والمتاجر للحصول على صورة أوضح للسوق."
           />
 
           <HowCard
@@ -366,16 +794,18 @@ export default function Home() {
           <HowCard
             number="04"
             title="قرر"
-            text="اعرف إذا كان العرض مناسبًا قبل اتخاذ قرار الشراء."
+            text="اعرف إذا كان السعر مناسبًا قبل اتخاذ قرار الشراء."
           />
         </div>
       </section>
 
+      {/* ================= POPULAR ================= */}
+
       <section
         style={{
-          maxWidth: "1000px",
+          maxWidth: "1050px",
           margin: "0 auto 100px",
-          padding: "0 25px",
+          padding: "0 24px",
         }}
       >
         <div
@@ -383,48 +813,75 @@ export default function Home() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "25px",
             gap: "20px",
+            marginBottom: "25px",
           }}
         >
-          <h2
+          <div>
+            <h2
+              style={{
+                fontSize: "30px",
+                margin: 0,
+                fontWeight: 900,
+              }}
+            >
+              🔥 الأكثر بحثًا
+            </h2>
+
+            <p
+              style={{
+                color: "#A7B4C5",
+                margin: "6px 0 0",
+                fontSize: "13px",
+              }}
+            >
+              ابدأ بأحد المنتجات الشائعة
+            </p>
+          </div>
+
+          <a
+            href="/search"
             style={{
-              fontSize: "36px",
-              margin: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              color: "#6EE7B7",
+              textDecoration: "none",
+              fontSize: "13px",
+              fontWeight: 800,
             }}
           >
-            🔥 الأكثر بحثًا
-          </h2>
-
-          <span style={{ color: "#666" }}>اختر منتجًا</span>
+            كل المنتجات
+            <span>‹</span>
+          </a>
         </div>
 
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
-            justifyContent: "center",
-            gap: "15px",
+            gap: "10px",
           }}
         >
           {popularProducts.map((product) => (
             <button
               key={product}
               type="button"
-              onClick={() => {
-                recordSearch();
-                window.location.href =
-                  "/search?q=" + encodeURIComponent(product);
-              }}
+              onClick={() =>
+                searchPopularProduct(product)
+              }
               style={{
-                background: "#fff",
-                color: "#222",
-                border: "none",
-                borderRadius: "40px",
-                padding: "17px 28px",
-                fontSize: "18px",
-                fontWeight: "700",
+                background: "#0E1621",
+                color: "#CBD5E1",
+                border: "1px solid #243244",
+                borderRadius: "999px",
+                padding: "12px 18px",
+                fontSize: "13px",
+                fontWeight: 700,
                 cursor: "pointer",
+                fontFamily: "inherit",
+                boxShadow:
+                  "0 5px 15px rgba(0,0,0,0.18)",
               }}
             >
               {product}
@@ -433,28 +890,52 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ================= ABOUT ================= */}
+
       <section
         id="about"
         style={{
-          maxWidth: "1000px",
-          margin: "0 auto 100px",
-          padding: "80px 25px 0",
-          scrollMarginTop: "120px",
-          textAlign: "center",
+          maxWidth: "1050px",
+          margin: "0 auto 90px",
+          padding: "0 24px",
+          scrollMarginTop: "100px",
         }}
       >
         <div
           style={{
-            background: "#101010",
-            border: "1px solid #292929",
             borderRadius: "25px",
+            background: "#0E1621",
+            border: "1px solid #243244",
             padding: "45px 30px",
+            textAlign: "center",
+            boxShadow:
+              "0 15px 40px -30px rgba(0,0,0,0.5)",
           }}
         >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              margin: "0 auto 15px",
+              borderRadius: "15px",
+              background: "rgba(16,185,129,0.12)",
+              color: "#6EE7B7",
+              border: "1px solid rgba(16,185,129,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "23px",
+              fontWeight: 900,
+            }}
+          >
+            ✓
+          </div>
+
           <h2
             style={{
-              fontSize: "40px",
-              margin: "0 0 18px",
+              fontSize: "34px",
+              margin: "0 0 15px",
+              fontWeight: 900,
             }}
           >
             عن TruePrice
@@ -462,97 +943,350 @@ export default function Home() {
 
           <p
             style={{
-              color: "#999",
-              fontSize: "19px",
-              lineHeight: "2",
-              maxWidth: "750px",
+              color: "#A7B4C5",
+              fontSize: "16px",
+              lineHeight: 2,
+              maxWidth: "760px",
               margin: "auto",
             }}
           >
-            TruePrice منصة تهدف إلى مساعدة المستهلك على فهم أسعار المنتجات
-            ومقارنتها قبل الشراء، من خلال عرض بيانات الأسعار وتحليلها بطريقة
-            بسيطة وواضحة.
+            TruePrice منصة مستقلة تهدف إلى مساعدة المستهلك
+            على فهم الأسعار ومقارنتها قبل الشراء، من خلال
+            عرض بيانات الأسعار وتحليلها بطريقة بسيطة وواضحة.
           </p>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              marginTop: "20px",
+              padding: "8px 14px",
+              borderRadius: "999px",
+              background: "rgba(16,185,129,0.10)",
+              color: "#6EE7B7",
+              border: "1px solid rgba(16,185,129,0.25)",
+              fontSize: "11px",
+              fontWeight: 800,
+            }}
+          >
+            ✓ منصة مستقلة لمرجع الأسعار والمعلومات
+          </div>
         </div>
       </section>
 
-      <style jsx>{`
-        @media (max-width: 700px) {
-          .trueprice-stats {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
-        }
-      `}</style>
+      {/* ================= FOOTER ================= */}
 
       <footer
         style={{
-          borderTop: "1px solid #222",
-          padding: "50px 25px",
-          textAlign: "center",
+          background:
+            "linear-gradient(180deg,#0B1120,#080D14)",
+          color: "white",
+          padding: "55px 24px 25px",
+          borderTop: "1px solid #1C2938",
         }}
       >
         <div
+          className="trueprice-footer-grid"
           style={{
-            fontSize: "24px",
-            fontWeight: "700",
+            maxWidth: "1050px",
+            margin: "auto",
+            display: "grid",
+            gridTemplateColumns:
+              "2fr 1fr 1fr",
+            gap: "45px",
           }}
         >
-          TruePrice
+          <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "12px",
+                  background:
+                    "rgba(16,185,129,0.15)",
+                  border:
+                    "1px solid rgba(52,211,153,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#6EE7B7",
+                  fontSize: "20px",
+                  fontWeight: 900,
+                }}
+              >
+                ✦
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    fontSize: "19px",
+                    fontWeight: 900,
+                  }}
+                >
+                  TruePrice
+                </div>
+
+                <div
+                  style={{
+                    color: "#8FA0B5",
+                    fontSize: "11px",
+                  }}
+                >
+                  منصة سعودية مستقلة لذكاء الأسعار
+                </div>
+              </div>
+            </div>
+
+            <p
+              style={{
+                color: "#8FA0B5",
+                fontSize: "13px",
+                lineHeight: 1.9,
+                maxWidth: "520px",
+                marginTop: "16px",
+              }}
+            >
+              TruePrice منصة مرجعية مستقلة لعرض ومقارنة
+              معلومات الأسعار، ولا تبيع المنتجات أو السيارات
+              ولا تعمل كوكيل أو وسيط.
+            </p>
+          </div>
+
+          <div>
+            <div style={footerTitleStyle}>
+              المنصة
+            </div>
+
+            <a href="/" style={footerLinkStyle}>
+              الرئيسية
+            </a>
+
+            <a
+              href="/search"
+              style={footerLinkStyle}
+            >
+              المنتجات
+            </a>
+
+            <a
+              href="/cars"
+              style={footerLinkStyle}
+            >
+              السيارات
+            </a>
+
+            <a
+              href="#how-it-works"
+              style={footerLinkStyle}
+            >
+              كيف يعمل؟
+            </a>
+          </div>
+
+          <div>
+            <div style={footerTitleStyle}>
+              المعلومات
+            </div>
+
+            <a
+              href="#about"
+              style={footerLinkStyle}
+            >
+              عن TruePrice
+            </a>
+
+            <a
+              href="/methodology"
+              style={footerLinkStyle}
+            >
+              المنهجية
+            </a>
+
+            <div
+              style={{
+                color: "#8FA0B5",
+                fontSize: "12px",
+                marginTop: "10px",
+              }}
+            >
+              الأسعار قد تتغير حسب المصدر ووقت التحقق.
+            </div>
+          </div>
         </div>
 
-        <p
+        <div
           style={{
-            color: "#666",
-            marginTop: "10px",
+            maxWidth: "1050px",
+            margin: "35px auto 0",
+            paddingTop: "18px",
+            borderTop:
+              "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "15px",
+            flexWrap: "wrap",
+            color: "#8FA0B5",
+            fontSize: "11px",
           }}
         >
-          المرجع الذكي للأسعار
-        </p>
+          <span>
+            © {new Date().getFullYear()} TruePrice
+          </span>
+
+          <span>
+            المرجع الذكي للأسعار — صنع في السعودية
+          </span>
+        </div>
       </footer>
+
+      {/* ================= RESPONSIVE ================= */}
+
+      <style jsx>{`
+        @media (max-width: 900px) {
+          .trueprice-car-brands {
+            grid-template-columns: repeat(
+              3,
+              minmax(0, 1fr)
+            ) !important;
+          }
+
+          .trueprice-how-grid {
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            ) !important;
+          }
+
+          .trueprice-footer-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+
+        @media (max-width: 700px) {
+          .trueprice-home-stats {
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            ) !important;
+          }
+
+          .trueprice-car-brands {
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            ) !important;
+          }
+
+          .trueprice-how-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .trueprice-footer-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .tp-cars-heading {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .tp-main-nav {
+            display: none !important;
+          }
+
+          .tp-header-inner {
+            padding-left: 15px !important;
+            padding-right: 15px !important;
+          }
+
+          form button {
+            padding-left: 17px !important;
+            padding-right: 17px !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }
+
+/* ================= HELPERS ================= */
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("ar-SA").format(value);
 }
 
 function StatCard({
+  icon,
   number,
   title,
 }: {
+  icon: string;
   number: string;
   title: string;
 }) {
   return (
     <div
       style={{
-        background: "#fff",
-        color: "#111",
-        borderRadius: "13px",
-        padding: "10px 8px",
-        textAlign: "center",
-        minWidth: 0,
+        background: "#0E1621",
+        border: "1px solid #243244",
+        borderRadius: "16px",
+        padding: "18px",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        boxShadow:
+          "0 8px 25px -20px rgba(0,0,0,0.5)",
       }}
     >
       <div
         style={{
-          color: "#16a34a",
-          fontSize: "24px",
-          fontWeight: "700",
+          width: "42px",
+          height: "42px",
+          borderRadius: "12px",
+          background: "rgba(16,185,129,0.12)",
+          color: "#10B981",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          fontSize: "20px",
+          fontWeight: 900,
         }}
       >
-        {number}
+        {icon}
       </div>
 
-      <div
-        style={{
-          color: "#555",
-          fontSize: "12px",
-          marginTop: "4px",
-        }}
-      >
-        {title}
+      <div>
+        <div
+          style={{
+            color: "#F8FAFC",
+            fontSize: "20px",
+            fontWeight: 900,
+          }}
+        >
+          {number}
+        </div>
+
+        <div
+          style={{
+            color: "#A7B4C5",
+            fontSize: "11px",
+            marginTop: "2px",
+          }}
+        >
+          {title}
+        </div>
       </div>
     </div>
   );
@@ -570,18 +1304,21 @@ function HowCard({
   return (
     <div
       style={{
-        background: "#101010",
-        border: "1px solid #292929",
-        borderRadius: "20px",
-        padding: "28px",
-        minHeight: "170px",
+        background: "#0E1621",
+        border: "1px solid #243244",
+        borderRadius: "19px",
+        padding: "25px",
+        minHeight: "165px",
+        boxShadow:
+          "0 10px 30px rgba(0,0,0,0.15)",
       }}
     >
       <div
         style={{
-          color: "#2563eb",
-          fontSize: "18px",
-          fontWeight: "700",
+          color: "#10B981",
+          fontSize: "13px",
+          fontWeight: 900,
+          fontFamily: "monospace",
         }}
       >
         {number}
@@ -589,8 +1326,10 @@ function HowCard({
 
       <h3
         style={{
-          fontSize: "27px",
-          margin: "14px 0 8px",
+          fontSize: "22px",
+          margin: "12px 0 7px",
+          fontWeight: 900,
+          color: "#F8FAFC",
         }}
       >
         {title}
@@ -598,9 +1337,9 @@ function HowCard({
 
       <p
         style={{
-          color: "#888",
-          fontSize: "17px",
-          lineHeight: "1.8",
+          color: "#A7B4C5",
+          fontSize: "13px",
+          lineHeight: 1.9,
           margin: 0,
         }}
       >
@@ -609,3 +1348,30 @@ function HowCard({
     </div>
   );
 }
+
+const headerLinkStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
+  color: "#CBD5E1",
+  fontSize: "13px",
+  fontWeight: 700,
+  textDecoration: "none",
+  padding: "9px 12px",
+  borderRadius: "9px",
+};
+
+const footerTitleStyle: CSSProperties = {
+  color: "#CBD5E1",
+  fontSize: "11px",
+  fontWeight: 800,
+  marginBottom: "13px",
+};
+
+const footerLinkStyle: CSSProperties = {
+  display: "block",
+  color: "#8FA0B5",
+  textDecoration: "none",
+  fontSize: "12px",
+  marginBottom: "9px",
+};
