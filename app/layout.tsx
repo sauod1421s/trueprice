@@ -13,17 +13,43 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TruePrice | المرجع الذكي للأسعار",
+  metadataBase: new URL("https://trueprice-theta.vercel.app"),
+
+  title: {
+    default: "TruePrice | المرجع الذكي للأسعار",
+    template: "%s | TruePrice",
+  },
+
   description:
-    "TruePrice منصة مستقلة لمقارنة أسعار المنتجات ومعرفة السعر العادل قبل الشراء.",
+    "TruePrice منصة مستقلة لمقارنة الأسعار ومعرفة السعر العادل قبل الشراء في السعودية.",
+
   keywords: [
     "TruePrice",
     "ترو برايس",
-    "أسعار المنتجات",
-    "مقارنة الأسعار",
     "السعر العادل",
+    "مقارنة الأسعار",
     "أسعار السعودية",
+    "مرجع الأسعار",
   ],
+
+  alternates: {
+    canonical: "/",
+  },
+
+  openGraph: {
+    title: "TruePrice | المرجع الذكي للأسعار",
+    description:
+      "منصة مستقلة لمقارنة الأسعار ومعرفة السعر العادل قبل الشراء في السعودية.",
+    url: "https://trueprice-theta.vercel.app/",
+    siteName: "TruePrice",
+    locale: "ar_SA",
+    type: "website",
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
