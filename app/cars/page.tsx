@@ -1,45 +1,60 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import brands from "@/app/data/cars";
 
-const carBrands = [
-  {
-    id: "toyota",
-    name: "Toyota",
-    nameAr: "تويوتا",
-    description: "أسعار ومواصفات سيارات تويوتا في السعودية",
-    initial: "T",
-  },
-  {
-    id: "hyundai",
-    name: "Hyundai",
-    nameAr: "هيونداي",
-    description: "أسعار ومواصفات سيارات هيونداي في السعودية",
-    initial: "H",
-  },
-  {
-    id: "kia",
-    name: "Kia",
-    nameAr: "كيا",
-    description: "أسعار ومواصفات سيارات كيا في السعودية",
-    initial: "K",
-  },
-  {
-    id: "nissan",
-    name: "Nissan",
-    nameAr: "نيسان",
-    description: "أسعار ومواصفات سيارات نيسان في السعودية",
-    initial: "N",
-  },
-  {
-    id: "mg",
-    name: "MG",
-    nameAr: "MG",
-    description: "أسعار ومواصفات سيارات MG في السعودية",
-    initial: "MG",
-  },
-];
+const brandNameAr: Record<string, string> = {
+  toyota: "تويوتا",
+  hyundai: "هيونداي",
+  kia: "كيا",
+  nissan: "نيسان",
+  mg: "MG",
+  ford: "فورد",
+  honda: "هوندا",
+  mazda: "مازدا",
+  suzuki: "سوزوكي",
+  isuzu: "إيسوزو",
+  changan: "شانجان",
+  geely: "جيلي",
+  gac: "GAC",
+  haval: "هافال",
+  jetour: "جيتور",
+  chery: "شيري",
+  chevrolet: "شفروليه",
+  gmc: "GMC",
+  mitsubishi: "ميتسوبيشي",
+  jeep: "جيب",
+  lexus: "لكزس",
+  bmw: "BMW",
+  mercedes: "مرسيدس-بنز",
+  audi: "أودي",
+  volkswagen: "فولكس واجن",
+  byd: "BYD",
+  exeed: "إكسيد",
+  hongqi: "هونشي",
+  greatwall: "جريت وول",
+  tank: "Tank",
+  jac: "JAC",
+  mahindra: "ماهيندرا",
+  renault: "رينو",
+  peugeot: "بيجو",
+  landrover: "لاند روفر",
+  volvo: "فولفو",
+  porsche: "بورشه",
+  tesla: "Tesla",
+  lucid: "Lucid",
+  genesis: "جينيسيس",
+};
 
+const carBrands = Object.entries(brands).map(
+  ([id, brand]) => ({
+    id,
+    name: brand.name,
+    nameAr: brandNameAr[id] ?? brand.name,
+    description: brand.description,
+    initial: brand.name.charAt(0).toUpperCase(),
+  })
+);
 export default function Page() {
   return (
     <main
