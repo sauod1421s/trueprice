@@ -13,434 +13,74 @@ import {
   getFairPriceLabel,
 } from "@/app/data/priceUtils";
 
-type CarModel = {
-  name: string;
-  year: number;
-  price: number;
-  trim?: string;
-  engine?: string;
-  power?: string;
-  fuel?: string;
+import brands, { type CarModel } from "@/app/data/cars";
+
+const brandNameAr: Record<string, string> = {
+  toyota: "تويوتا",
+  hyundai: "هيونداي",
+  kia: "كيا",
+  nissan: "نيسان",
+  mg: "MG",
+  ford: "فورد",
+  honda: "هوندا",
+  mazda: "مازدا",
+  suzuki: "سوزوكي",
+  isuzu: "إيسوزو",
+  changan: "شانجان",
+  geely: "جيلي",
+  gac: "GAC",
+  haval: "هافال",
+  jetour: "جيتور",
+  chery: "شيري",
+  chevrolet: "شفروليه",
+  gmc: "GMC",
+  mitsubishi: "ميتسوبيشي",
+  jeep: "جيب",
+  lexus: "لكزس",
+  bmw: "BMW",
+  mercedes: "مرسيدس",
+  audi: "أودي",
+  volkswagen: "فولكس واجن",
+  byd: "BYD",
+  exeed: "إكسيد",
+  hongqi: "هونشي",
+  greatwall: "جريت وول",
+  tank: "تانك",
+  jac: "جاك",
+  mahindra: "ماهيندرا",
+  renault: "رينو",
+  peugeot: "بيجو",
+  landrover: "لاند روفر",
+  volvo: "فولفو",
+  porsche: "بورشه",
+  tesla: "تسلا",
+  lucid: "لوسيد",
+  genesis: "جينيسيس",
 };
 
-const brands: Record<
-  string,
-  {
-    name: string;
-    description: string;
-    sourceName: string;
-    sourceUrl: string;
-    models: CarModel[];
+function getFairPrice(car: CarModel) {
+  if (typeof car.price !== "number") {
+    return {
+      fairPrice: null,
+      marketLow: null,
+      marketHigh: null,
+      marketAverage: null,
+      marketCount: 0,
+      sourceCount: 0,
+      sources: [],
+      status: "not-enough-data" as const,
+      difference: null,
+      differencePercent: null,
+    };
   }
-> = {
-  toyota: {
-    name: "تويوتا",
-    description: "أسعار سيارات تويوتا المنشورة في السوق السعودي.",
-    sourceName: "Toyota السعودية",
-    sourceUrl: "https://www.toyota.com.sa/ar/vehicles",
 
-    models: [
-      {
-        name: "Yaris",
-        year: 2026,
-        price: 66987.5,
-        engine: "1.3 لتر",
-        power: "97 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Corolla",
-        year: 2026,
-        price: 82627.5,
-        trim: "1.5L XLI",
-        engine: "1.5 لتر",
-        power: "119 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Camry",
-        year: 2026,
-        price: 109825,
-        engine: "2.5 لتر",
-        fuel: "بنزين / هجين",
-      },
-      {
-        name: "Crown",
-        year: 2026,
-        price: 158355,
-        fuel: "هجين",
-      },
-      {
-        name: "GR86",
-        year: 2026,
-        price: 147487.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "Supra",
-        year: 2026,
-        price: 278760,
-        fuel: "بنزين",
-      },
-      {
-        name: "Raize",
-        year: 2026,
-        price: 68827.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "Urban Cruiser",
-        year: 2026,
-        price: 84755,
-        fuel: "بنزين",
-      },
-      {
-        name: "Veloz",
-        year: 2026,
-        price: 84007.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "Corolla Cross",
-        year: 2025,
-        price: 103845,
-        fuel: "بنزين",
-      },
-      {
-        name: "RAV4",
-        year: 2026,
-        price: 106662.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "Innova",
-        year: 2026,
-        price: 127765,
-        fuel: "بنزين",
-      },
-      {
-        name: "Land Cruiser Hardtop",
-        year: 2026,
-        price: 158240,
-        fuel: "بنزين",
-      },
-      {
-        name: "Fortuner",
-        year: 2026,
-        price: 128742.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "Highlander",
-        year: 2026,
-        price: 151455,
-        fuel: "بنزين",
-      },
-      {
-        name: "Prado",
-        year: 2026,
-        price: 199582.5,
-        trim: "TX-2",
-        engine: "2.4 لتر تيربو",
-        power: "267 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Land Cruiser",
-        year: 2026,
-        price: 263407.5,
-        fuel: "بنزين",
-      },
-      {
-        name: "LC300 HEV MAX",
-        year: 2026,
-        price: 334535,
-        fuel: "هجين",
-      },
-    ],
-  },
-
-  hyundai: {
-    name: "هيونداي",
-    description:
-      "أسعار هيونداي المنشورة من موزعيها المعتمدين في السعودية.",
-    sourceName: "موزعو هيونداي في السعودية",
-    sourceUrl: "https://hyundaiksa.com/",
-
-    models: [
-      {
-        name: "Accent",
-        year: 2026,
-        price: 71484,
-        engine: "1.5 لتر",
-        power: "113 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Elantra",
-        year: 2026,
-        price: 86694,
-        trim: "1.5 GL",
-        engine: "1.5 لتر",
-        power: "157 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Tucson",
-        year: 2026,
-        price: 107704,
-        engine: "1.6 لتر تيربو",
-        power: "178 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Creta",
-        year: 2026,
-        price: 86200,
-        engine: "1.5 لتر تيربو",
-        power: "160 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Sonata",
-        year: 2026,
-        price: 107904,
-        engine: "2.5 لتر تيربو",
-        power: "290 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Kona",
-        year: 2026,
-        price: 86290,
-        engine: "2.0 لتر",
-        power: "195 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Palisade",
-        year: 2026,
-        price: 177039,
-        engine: "2.5 لتر تيربو",
-        power: "277 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "Staria Premium",
-        year: 2026,
-        price: 177447,
-        engine: "3.5 لتر",
-        power: "268 حصان",
-        fuel: "بنزين",
-      },
-    ],
-  },
-
-  kia: {
-    name: "كيا",
-    description:
-      "أسعار كيا المنشورة من موزع كيا في السعودية.",
-    sourceName: "كيا الجبر",
-    sourceUrl: "https://www.kia.com/aljabr/ar/",
-
-    models: [
-      {
-        name: "K4",
-        year: 2026,
-        price: 86135,
-        fuel: "بنزين",
-      },
-      {
-        name: "K8",
-        year: 2026,
-        price: 160885,
-        fuel: "بنزين",
-      },
-      {
-        name: "K5",
-        year: 2026,
-        price: 103385,
-        fuel: "بنزين",
-      },
-      {
-        name: "Pegas",
-        year: 2026,
-        price: 53935,
-        fuel: "بنزين",
-      },
-      {
-        name: "K3",
-        year: 2026,
-        price: 72335,
-        fuel: "بنزين",
-      },
-      {
-        name: "Carens",
-        year: 2026,
-        price: 91885,
-        fuel: "بنزين",
-      },
-      {
-        name: "Sportage L",
-        year: 2026,
-        price: 103385,
-        fuel: "بنزين",
-      },
-      {
-        name: "Sonet",
-        year: 2026,
-        price: 74635,
-        fuel: "بنزين",
-      },
-      {
-        name: "Seltos",
-        year: 2026,
-        price: 76935,
-        fuel: "بنزين",
-      },
-      {
-        name: "Carnival",
-        year: 2026,
-        price: 149385,
-        fuel: "بنزين",
-      },
-      {
-        name: "Telluride",
-        year: 2026,
-        price: 160885,
-        fuel: "بنزين",
-      },
-    ],
-  },
-
-  nissan: {
-    name: "نيسان",
-    description:
-      "أسعار سيارات نيسان المنشورة في السوق السعودي.",
-    sourceName: "نيسان السعودية",
-    sourceUrl:
-      "https://ar.nissan-saudiarabia.com/vehicles/new.html",
-
-    models: [
-      {
-        name: "Magnite",
-        year: 2026,
-        price: 69999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Kicks",
-        year: 2026,
-        price: 89599,
-        fuel: "بنزين",
-      },
-      {
-        name: "X-Trail",
-        year: 2026,
-        price: 104999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Altima",
-        year: 2026,
-        price: 112700,
-        fuel: "بنزين",
-      },
-      {
-        name: "X-Terra",
-        year: 2026,
-        price: 118999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Pathfinder",
-        year: 2026,
-        price: 164999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Patrol",
-        year: 2026,
-        price: 270999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Patrol PRO-4X",
-        year: 2026,
-        price: 380999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Patrol NISMO",
-        year: 2026,
-        price: 450999,
-        fuel: "بنزين",
-      },
-      {
-        name: "Z",
-        year: 2026,
-        price: 261999,
-        fuel: "بنزين",
-      },
-    ],
-  },
-
-  mg: {
-    name: "MG",
-    description:
-      "أسعار سيارات MG المنشورة من MG السعودية.",
-    sourceName: "MG السعودية",
-    sourceUrl: "https://www.mg-sa.com/ar/",
-
-    models: [
-      {
-        name: "MG 5",
-        year: 2026,
-        price: 54450,
-        engine: "1.5 لتر",
-        power: "110 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "MG 7",
-        year: 2026,
-        price: 86650,
-        engine: "2.0 لتر تيربو",
-        power: "261 حصان",
-        fuel: "بنزين",
-      },
-      {
-        name: "MG HS",
-        year: 2026,
-        price: 85040,
-        engine: "2.0 لتر تيربو",
-        fuel: "بنزين",
-      },
-      {
-        name: "MG HS Hybrid+",
-        year: 2026,
-        price: 116089,
-        power: "221 حصان",
-        fuel: "هجين",
-      },
-      {
-        name: "MG RX9",
-        year: 2026,
-        price: 108765,
-        engine: "2.0 لتر تيربو",
-        fuel: "بنزين",
-      },
-      {
-        name: "MG One",
-        year: 2026,
-        price: 74610,
-        engine: "1.5 لتر تيربو",
-        power: "168 حصان",
-        fuel: "بنزين",
-      },
-    ],
-  },
-};
+  return calculateFairPrice(
+    car.name,
+    car.year,
+    car.price,
+    car.trim
+  );
+}
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("ar-SA", {
@@ -455,7 +95,8 @@ export default async function Page({
 }) {
   const { brand: brandParam } = await params;
 
-  const brand = brands[brandParam.toLowerCase()];
+  const brandId = brandParam.toLowerCase();
+  const brand = brands[brandId];
 
   if (!brand) {
     return (
@@ -620,12 +261,7 @@ export default async function Page({
           }}
         >
           {brand.models.map((car) => {
-            const fair = calculateFairPrice(
-              car.name,
-              car.year,
-              car.price,
-              car.trim
-            );
+            const fair = getFairPrice(car);
 
             return (
               <article
@@ -714,17 +350,21 @@ export default async function Page({
                       color: "#FFFFFF",
                     }}
                   >
-                    {formatPrice(car.price)}
+                    {typeof car.price === "number"
+                      ? formatPrice(car.price)
+                      : "السعر غير متوفر"}
 
-                    <span
-                      style={{
-                        fontSize: 16,
-                        color: "#9BA9B8",
-                        marginRight: 7,
-                      }}
-                    >
-                      ريال
-                    </span>
+                    {typeof car.price === "number" && (
+                      <span
+                        style={{
+                          fontSize: 16,
+                          color: "#9BA9B8",
+                          marginRight: 7,
+                        }}
+                      >
+                        ريال
+                      </span>
+                    )}
                   </div>
 
                   <div
