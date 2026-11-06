@@ -1,0 +1,7 @@
+﻿اسم المنتج;السعر;العملة;الرابط;المتجر;الباركود;رقم الموديل;الشركة;التوفر;الحالة;تاريخ التحديث
+"Test Phone X 256GB; Black";"١٬٩٤٩ ر.س";ر.س;https://delta.example.sa/p/1;متجر دلتا التجريبي;4006381333931;TPX-256-BK;TestBrand;متوفر;جديد;2026-11-05T08:00:00+03:00
+Test Phone X 256GB مستعمل;1450;SAR;https://delta.example.sa/p/2;متجر دلتا التجريبي;;;TestBrand;متوفر;مستعمل;2026-11-05T08:00:00+03:00
+Missing price item;;SAR;https://delta.example.sa/p/3;متجر دلتا التجريبي;;;;;;
+Bad link item;999;SAR;not-a-url;متجر دلتا التجريبي;;;;;;
+Unknown currency item;999;XYZ;https://delta.example.sa/p/5;متجر دلتا التجريبي;;;;;;
+Strange condition;999;SAR;https://delta.example.sa/p/6;متجر دلتا التجريبي;;;;;broken-ish;

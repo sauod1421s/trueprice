@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TEST FIXTURE: fictional store and prices (YML layout used by affiliate networks) -->
+<yml_catalog date="2026-11-03 18:45">
+  <shop>
+    <name>Test Store Gamma</name>
+    <company>Gamma Test LLC</company>
+    <url>https://gamma.example.com</url>
+    <currencies><currency id="SAR" rate="1"/></currencies>
+    <categories><category id="1">Phones</category></categories>
+    <offers>
+      <offer id="G-100" available="true">
+        <url>https://ad.admitad.com/goto/test123/?ulp=https%3A%2F%2Fgamma.example.com%2Fp%2F100</url>
+        <price>2149</price>
+        <oldprice>2299</oldprice>
+        <currencyId>SAR</currencyId>
+        <categoryId>1</categoryId>
+        <name>Test Phone X 256GB</name>
+        <vendor>TestBrand</vendor>
+        <model>TPX-256-BK</model>
+        <barcode>4006381333931</barcode>
+      </offer>
+      <offer id="G-101" available="false">
+        <url>https://gamma.example.com/p/101</url>
+        <price>899</price>
+        <name>Test Earbuds 2</name>
+        <vendor>OtherBrand</vendor>
+        <barcode>1234567890123</barcode>
+      </offer>
+      <offer id="G-102" available="true">
+        <url>https://gamma.example.com/p/102</url>
+        <price>abc</price>
+        <name>Unreadable price</name>
+      </offer>
+    </offers>
+  </shop>
+</yml_catalog>

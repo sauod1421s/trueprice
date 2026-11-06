@@ -1,0 +1,5 @@
+id,title,price,currency,deeplink,advertiser,ean,mpn,brand,availability,condition,updated_at
+N-1,Test Phone X 256GB,"2,049.00",SAR,https://go.arabclicks.com/aff_c?offer=1&url=https%3A%2F%2Fepsilon.example.com,Test Store Epsilon,4006381333931,TPX-256-BK,TestBrand,in stock,new,2026-11-05 10:00
+N-1,Test Phone X 256GB,"2,049.00",SAR,https://go.arabclicks.com/aff_c?offer=1&url=https%3A%2F%2Fepsilon.example.com,Test Store Epsilon,4006381333931,TPX-256-BK,TestBrand,in stock,new,2026-11-05 10:00
+N-2,Test Tablet 11,1599,SAR,https://go.arabclicks.com/aff_c?offer=2,,,,TestBrand,in stock,new,2026-11-05 10:00
+N-3,Test Phone X 256GB,"1999",SAR,https://alpha.example.com/p/test-phone-x-256,Test Store Alpha,4006381333931,TPX-256-BK,TestBrand,in stock,new,2026-11-05 11:00

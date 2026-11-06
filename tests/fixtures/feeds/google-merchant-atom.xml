@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TEST FIXTURE: fictional store and prices -->
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:g="http://base.google.com/ns/1.0">
+  <title>Test Store Beta</title>
+  <updated>2026-11-04T12:30:00Z</updated>
+  <entry>
+    <g:id>B-1</g:id>
+    <g:title>Test Watch S 45mm</g:title>
+    <g:link>https://beta.example.com/watch-s-45</g:link>
+    <g:price>1299 SAR</g:price>
+    <g:availability>preorder</g:availability>
+    <g:condition>used</g:condition>
+    <g:brand>TestBrand</g:brand>
+  </entry>
+</feed>

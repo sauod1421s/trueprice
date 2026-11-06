@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TEST FIXTURE: fictional store and prices -->
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>Test Store Alpha</title>
+    <link>https://alpha.example.com</link>
+    <lastBuildDate>Thu, 05 Nov 2026 09:00:00 GMT</lastBuildDate>
+    <item>
+      <g:id>ALPHA-001</g:id>
+      <g:title><![CDATA[Test Phone X 256GB - Black]]></g:title>
+      <g:link>https://alpha.example.com/p/test-phone-x-256</g:link>
+      <g:price>1,999.00 SAR</g:price>
+      <g:sale_price>1,899.00 SAR</g:sale_price>
+      <g:availability>in_stock</g:availability>
+      <g:condition>new</g:condition>
+      <g:brand>TestBrand</g:brand>
+      <g:gtin>4006381333931</g:gtin>
+      <g:mpn>TPX-256-BK</g:mpn>
+    </item>
+    <item>
+      <g:id>ALPHA-002</g:id>
+      <g:title>Test Laptop Pro 14</g:title>
+      <g:link>https://alpha.example.com/p/test-laptop-pro-14</g:link>
+      <g:price>4999 SAR</g:price>
+      <g:availability>out_of_stock</g:availability>
+      <g:condition>refurbished</g:condition>
+      <g:brand>TestBrand</g:brand>
+      <g:mpn>TLP-14</g:mpn>
+    </item>
+    <item>
+      <g:id>ALPHA-003</g:id>
+      <g:title>Zero priced item</g:title>
+      <g:link>https://alpha.example.com/p/zero</g:link>
+      <g:price>0.00 SAR</g:price>
+      <g:availability>in_stock</g:availability>
+    </item>
+    <item>
+      <g:id>ALPHA-004</g:id>
+      <g:title>Wrong currency item</g:title>
+      <g:link>https://alpha.example.com/p/usd</g:link>
+      <g:price>499.00 USD</g:price>
+    </item>
+  </channel>
+</rss>
