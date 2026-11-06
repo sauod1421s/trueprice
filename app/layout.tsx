@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SITE_URL } from "./lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://trueprice-theta.vercel.app"),
+  metadataBase: new URL(SITE_URL),
 
   title: {
     default: "TruePrice | المرجع الذكي للأسعار",
@@ -32,15 +33,10 @@ export const metadata: Metadata = {
     "مرجع الأسعار",
   ],
 
-  alternates: {
-    canonical: "/",
-  },
-
   openGraph: {
     title: "TruePrice | المرجع الذكي للأسعار",
     description:
       "منصة مستقلة لمقارنة الأسعار ومعرفة السعر العادل قبل الشراء في السعودية.",
-    url: "https://trueprice-theta.vercel.app/",
     siteName: "TruePrice",
     locale: "ar_SA",
     type: "website",

@@ -1,22 +1,9 @@
 "use client";
 
-declare global {
-  interface Window {
-    truePriceRecordStoreVisit?: () => void;
-  }
-}
-
-import { useEffect, useState, type CSSProperties } from "react";
-
-const popularProducts = [
-  "iPhone 17",
-  "ايفون 17",
-  "iPhone 16 Pro",
-  "Galaxy S25 Ultra",
-  "MacBook Air M4",
-  "PlayStation 5",
-  "Nintendo Switch 2",
-];
+import Link from "next/link";
+import { useState, type CSSProperties } from "react";
+import { siteStats } from "./lib/siteStats";
+import { popularProducts } from "./lib/examples";
 
 const carBrands = [
   {
@@ -53,50 +40,10 @@ const carBrands = [
 
 export default function Home() {
   const [search, setSearch] = useState("");
-  const [searchCount, setSearchCount] = useState(0);
-  const [storeVisits, setStoreVisits] = useState(0);
-
-  useEffect(() => {
-    const savedSearches = Number(
-      localStorage.getItem("trueprice_searches") || "0"
-    );
-
-    const savedStoreVisits = Number(
-      localStorage.getItem("trueprice_store_visits") || "0"
-    );
-
-    setSearchCount(savedSearches);
-    setStoreVisits(savedStoreVisits);
-
-    window.truePriceRecordStoreVisit = () => {
-      const current = Number(
-        localStorage.getItem("trueprice_store_visits") || "0"
-      );
-
-      const next = current + 1;
-
-      localStorage.setItem("trueprice_store_visits", String(next));
-      setStoreVisits(next);
-    };
-  }, []);
-
-  function recordSearch() {
-    const current = Number(
-      localStorage.getItem("trueprice_searches") || "0"
-    );
-
-    const next = current + 1;
-
-    localStorage.setItem("trueprice_searches", String(next));
-    setSearchCount(next);
-  }
-
   function goToSearch() {
     const value = search.trim();
 
     if (!value) return;
-
-    recordSearch();
 
     window.location.assign(
       `/search?q=${encodeURIComponent(value)}`
@@ -104,7 +51,6 @@ export default function Home() {
   }
 
   function searchPopularProduct(product: string) {
-    recordSearch();
 
     window.location.assign(
       `/search?q=${encodeURIComponent(product)}`
@@ -214,11 +160,11 @@ export default function Home() {
               الرئيسية
             </a>
 
-            <a href="/search" style={headerLinkStyle}>
+            <Link href="/search" style={headerLinkStyle}>
               المنتجات
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/cars"
               style={{
                 ...headerLinkStyle,
@@ -228,7 +174,7 @@ export default function Home() {
             >
               <span style={{ fontSize: "15px" }}>🚗</span>
               السيارات
-            </a>
+            </Link>
 
             <a
               href="#how-it-works"
@@ -242,7 +188,7 @@ export default function Home() {
             </a>
           </nav>
 
-          <a
+          <Link
             href="/search"
             style={{
               display: "inline-flex",
@@ -261,7 +207,7 @@ export default function Home() {
           >
             <span>⌕</span>
             بحث
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -494,26 +440,26 @@ export default function Home() {
         >
           <StatCard
             icon="▥"
-            number="35"
-            title="منتج"
+            number={formatNumber(siteStats.products)}
+            title="منتج إلكتروني"
           />
 
           <StatCard
             icon="▣"
-            number="16"
-            title="متجر"
+            number={formatNumber(siteStats.stores)}
+            title="متجر مرجعي"
           />
 
           <StatCard
             icon="⌕"
-            number={formatNumber(searchCount)}
-            title="عملية بحث"
+            number={formatNumber(siteStats.carBrands)}
+            title="علامة سيارات"
           />
 
           <StatCard
             icon="↗"
-            number={formatNumber(storeVisits)}
-            title="زيارة متجر"
+            number={formatNumber(siteStats.carModels)}
+            title="موديل سيارة"
           />
         </div>
       </section>
@@ -605,7 +551,7 @@ export default function Home() {
               </p>
             </div>
 
-            <a
+            <Link
               href="/cars"
               style={{
                 display: "inline-flex",
@@ -623,7 +569,7 @@ export default function Home() {
             >
               استعرض السيارات
               <span>←</span>
-            </a>
+            </Link>
           </div>
 
           <div
@@ -637,7 +583,7 @@ export default function Home() {
             }}
           >
             {carBrands.map((brand) => (
-              <a
+              <Link
                 key={brand.name}
                 href={`/cars/${brand.name.toLowerCase()}`}
                 style={{
@@ -704,7 +650,7 @@ export default function Home() {
                 >
                   {brand.description}
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -825,7 +771,7 @@ export default function Home() {
                 fontWeight: 900,
               }}
             >
-              🔥 الأكثر بحثًا
+              🔎 أمثلة للبحث
             </h2>
 
             <p
@@ -839,7 +785,7 @@ export default function Home() {
             </p>
           </div>
 
-          <a
+          <Link
             href="/search"
             style={{
               display: "inline-flex",
@@ -853,7 +799,7 @@ export default function Home() {
           >
             كل المنتجات
             <span>‹</span>
-          </a>
+          </Link>
         </div>
 
         <div
@@ -1066,23 +1012,23 @@ export default function Home() {
               المنصة
             </div>
 
-            <a href="/" style={footerLinkStyle}>
+            <Link href="/" style={footerLinkStyle}>
               الرئيسية
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/search"
               style={footerLinkStyle}
             >
               المنتجات
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/cars"
               style={footerLinkStyle}
             >
               السيارات
-            </a>
+            </Link>
 
             <a
               href="#how-it-works"
@@ -1104,12 +1050,12 @@ export default function Home() {
               عن TruePrice
             </a>
 
-            <a
+            <Link
               href="/methodology"
               style={footerLinkStyle}
             >
               المنهجية
-            </a>
+            </Link>
 
             <div
               style={{

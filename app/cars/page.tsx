@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import Link from "next/link";
 import brands from "@/app/data/cars";
 
 const brandNameAr: Record<string, string> = {
@@ -99,7 +99,7 @@ export default function Page() {
             margin: "auto",
           }}
         >
-          <a
+          <Link
             href="/"
             style={{
               color: "#94A3B8",
@@ -109,7 +109,7 @@ export default function Page() {
             }}
           >
             ← العودة إلى TruePrice
-          </a>
+          </Link>
 
           <div
             style={{

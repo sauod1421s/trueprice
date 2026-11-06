@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import products from "../../data/products";
+import { priceSpread } from "../../lib/pricing";
+import { describeEntryDate, TRUST_TEXT } from "../../lib/trust";
 
 type PageOffer = {
   store: string;
@@ -43,6 +46,7 @@ type ProductPageProduct = {
   colors?: string[];
   description?: string | null;
   lastUpdated?: string | null;
+  lastUpdatedConfirmed?: boolean;
   store?: string | null;
   amazonUrl?: string | null;
 };
@@ -52,6 +56,38 @@ type PageProps = {
     id: string;
   }>;
 };
+
+export function generateStaticParams() {
+  return products.map((p) => ({ id: String(p.id) }));
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const product = products.find((item) => item.id === Number(id));
+
+  if (!product) {
+    return { title: "المنتج غير موجود", robots: { index: false } };
+  }
+
+  const title = `سعر ${product.nameAr} في السعودية`;
+  const description = `مقارنة الأسعار المرجعية لـ ${product.nameAr} (${product.name}) لدى ${product.offers.length} متاجر في السعودية. الأسعار مُدخلة يدويًا وغير موثقة بعد — تحقق من المتجر قبل الشراء.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/product/${product.id}` },
+    openGraph: {
+      title,
+      description,
+      url: `/product/${product.id}`,
+      type: "website",
+      siteName: "TruePrice",
+      locale: "ar_SA",
+    },
+  };
+}
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
@@ -64,15 +100,18 @@ export default async function ProductPage({ params }: PageProps) {
     notFound();
   }
 
-  const currentPrice = product.price ?? 0;
-  const fairPrice = product.fairPrice ?? 0;
+  /*
+   * التوفير = أعلى سعر مرجعي − أقل سعر مرجعي.
+   * (الحساب السابق: أقل سعر − السعر العادل، وكان دائمًا صفرًا
+   * لأن أقل سعر لا يمكن أن يتجاوز الوسيط.)
+   */
+  const spread = priceSpread(product.offers.map((o) => o.price));
 
-  const saving = Math.max(0, currentPrice - fairPrice);
-
-  const isGoodPrice =
-    product.price !== null &&
-    product.fairPrice !== null &&
-    product.price <= product.fairPrice;
+  /*
+   * لا نصدر حكمًا "سعر مناسب / أعلى من العادل" لأن الأسعار غير
+   * موثقة، ولأن أقل سعر يقع دائمًا تحت الوسيط فالحكم كان مضللًا.
+   */
+  const hasFairEstimate = product.fairPrice !== null;
 
   return (
     <main
@@ -120,6 +159,28 @@ export default async function ProductPage({ params }: PageProps) {
             marginBottom: "22px",
           }}
         >
+          {/* تنبيه حالة البيانات */}
+          <div
+            role="note"
+            style={{
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              color: "#92400e",
+              borderRadius: "14px",
+              padding: "12px 16px",
+              fontSize: "14px",
+              lineHeight: "1.8",
+              marginBottom: "22px",
+            }}
+          >
+            <strong>
+              ⚠️ {TRUST_TEXT.manualEntry} · {TRUST_TEXT.unverified} ·{" "}
+              {TRUST_TEXT.dateUnconfirmed}
+            </strong>
+            <br />
+            {TRUST_TEXT.verificationPending}
+          </div>
+
           {/* العنوان */}
           <div
             style={{
@@ -197,7 +258,7 @@ export default async function ProductPage({ params }: PageProps) {
                   marginBottom: "8px",
                 }}
               >
-                السعر الحالي
+                أقل سعر مرجعي
               </div>
 
               <div
@@ -261,18 +322,8 @@ export default async function ProductPage({ params }: PageProps) {
               borderRadius: "18px",
               padding: "22px",
               background:
-                product.price !== null && product.fairPrice !== null
-                  ? isGoodPrice
-                    ? "#ecfdf5"
-                    : "#fff7ed"
-                  : "#f9fafb",
-              border: `1px solid ${
-                product.price !== null && product.fairPrice !== null
-                  ? isGoodPrice
-                    ? "#bbf7d0"
-                    : "#fed7aa"
-                  : "#e5e7eb"
-              }`,
+                "#f9fafb",
+              border: "1px solid #e5e7eb",
               marginBottom: "18px",
             }}
           >
@@ -290,29 +341,18 @@ export default async function ProductPage({ params }: PageProps) {
                   style={{
                     fontSize: "16px",
                     fontWeight: "800",
-                    color:
-                      product.price !== null &&
-                      product.fairPrice !== null
-                        ? isGoodPrice
-                          ? "#15803d"
-                          : "#c2410c"
-                        : "#6b7280",
+                    color: "#374151",
                     marginBottom: "7px",
                   }}
                 >
-                  ⭐ السعر العادل
+                  ⭐ السعر العادل (تقدير أولي)
                 </div>
 
                 <div
                   style={{
                     fontSize: "clamp(28px, 5vw, 38px)",
                     fontWeight: "900",
-                    color:
-                      product.fairPrice !== null
-                        ? isGoodPrice
-                          ? "#15803d"
-                          : "#c2410c"
-                        : "#6b7280",
+                    color: "#4b5563",
                   }}
                 >
                   {product.fairPrice !== null
@@ -329,33 +369,13 @@ export default async function ProductPage({ params }: PageProps) {
                   color: "#374151",
                 }}
               >
-                {product.price !== null && product.fairPrice !== null ? (
-                  isGoodPrice ? (
-                    <>
-                      <strong style={{ color: "#15803d" }}>
-                        ✅ سعر مناسب
-                      </strong>
-                      <br />
-                      السعر الحالي ضمن السعر العادل.
-                    </>
-                  ) : (
-                    <>
-                      <strong style={{ color: "#c2410c" }}>
-                        ⚠️ السعر أعلى من العادل
-                      </strong>
-                      <br />
-                      حاول الحصول على سعر أقل.
-                    </>
-                  )
-                ) : (
-                  <>
-                    <strong style={{ color: "#6b7280" }}>
-                      ℹ️ لا تتوفر بيانات كافية
-                    </strong>
-                    <br />
-                    لا يمكن تحديد حالة السعر حاليًا.
-                  </>
-                )}
+                <strong style={{ color: "#6b7280" }}>
+                  ℹ️ لا نصدر حكمًا على السعر حاليًا
+                </strong>
+                <br />
+                {hasFairEstimate
+                  ? `وسيط ${product.offers.length} أسعار مرجعية غير موثقة، وليس سعرًا معتمدًا.`
+                  : TRUST_TEXT.dataUnavailable}
               </div>
             </div>
           </div>
@@ -370,19 +390,27 @@ export default async function ProductPage({ params }: PageProps) {
             }}
           >
             <InfoBox
-              title="💰 التوفير"
+              title="💰 التوفير المحتمل"
               value={
-                saving > 0
-                  ? `${saving.toLocaleString("en-US")} ريال`
-                  : "لا يوجد"
+                spread && spread.saving > 0
+                  ? `${spread.saving.toLocaleString("en-US")} ريال`
+                  : spread
+                  ? "الأسعار متساوية"
+                  : TRUST_TEXT.dataUnavailable
+              }
+              note={
+                spread && spread.saving > 0
+                  ? `الفرق بين أعلى وأقل سعر مرجعي (${spread.savingPercent.toFixed(1)}%)`
+                  : undefined
               }
               color="#16a34a"
             />
 
             <InfoBox
-              title="🛡️ مستوى الثقة"
-              value={`${product.confidence}%`}
-              color="#111827"
+              title="🛡️ حالة البيانات"
+              value={TRUST_TEXT.unverified}
+              note={TRUST_TEXT.manualEntry}
+              color="#b45309"
             />
 
             <InfoBox
@@ -589,18 +617,18 @@ export default async function ProductPage({ params }: PageProps) {
                       {offer.storeAr || offer.store}
                     </div>
 
-                    {(offer.verified ?? offer.isVerified) && (
-                      <div
-                        style={{
-                          color: "#16a34a",
-                          fontSize: "14px",
-                          marginTop: "5px",
-                          fontWeight: "700",
-                        }}
-                      >
-                        ✓ متجر موثق
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        color: "#b45309",
+                        fontSize: "13px",
+                        marginTop: "5px",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {offer.verified ?? offer.isVerified
+                        ? "✓ سعر موثق"
+                        : `${TRUST_TEXT.manualEntry} · ${TRUST_TEXT.unverified}`}
+                    </div>
                   </div>
 
                   <div
@@ -687,7 +715,11 @@ export default async function ProductPage({ params }: PageProps) {
             padding: "10px",
           }}
         >
-          آخر تحديث: {product.lastUpdated || "غير محدد"}
+          تاريخ الإدخال:{" "}
+          {describeEntryDate(
+            product.lastUpdated,
+            product.lastUpdatedConfirmed ?? false
+          )}
         </div>
       </div>
     </main>
@@ -785,10 +817,12 @@ function InfoBox({
   title,
   value,
   color,
+  note,
 }: {
   title: string;
   value: string;
   color: string;
+  note?: string;
 }) {
   return (
     <div
@@ -821,6 +855,18 @@ function InfoBox({
       >
         {value}
       </div>
+
+      {note && (
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginTop: "6px",
+          }}
+        >
+          {note}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { marketPrices } from "./priceSources";
+import { allPricesIdentical } from "../lib/pricing";
 
 export type FairPriceResult = {
   fairPrice: number | null;
@@ -16,7 +17,9 @@ export type FairPriceResult = {
     | "excellent"
     | "fair"
     | "high"
-    | "not-enough-data";
+    | "not-enough-data"
+    /** الأسعار متطابقة في كل المصادر: لا يمكن التأكد من استقلاليتها */
+    | "not-independent";
   difference: number | null;
   differencePercent: number | null;
 };
@@ -96,6 +99,29 @@ export function calculateFairPrice(
       values.length
   );
 
+  /*
+   * إذا تطابق السعر حرفيًا في جميع المصادر فالأرجح أنها
+   * تنقل من مصدر واحد، فلا نعرض سعرًا عادلًا حتى تتم مراجعتها.
+   */
+  if (allPricesIdentical(values)) {
+    return {
+      fairPrice: null,
+      marketLow,
+      marketHigh,
+      marketAverage,
+      marketCount: prices.length,
+      sourceCount: uniqueSources.length,
+      sources: prices.map((item) => ({
+        source: item.source,
+        price: item.price,
+        url: item.url,
+      })),
+      status: "not-independent",
+      difference: null,
+      differencePercent: null,
+    };
+  }
+
   const middle = Math.floor(values.length / 2);
 
   const median =
@@ -151,6 +177,9 @@ export function getFairPriceLabel(
     case "high":
       return "أعلى من السعر العادل";
 
+    case "not-independent":
+      return "المصادر غير مستقلة — قيد المراجعة";
+
     default:
       return "بيانات السوق غير كافية";
   }
@@ -168,6 +197,9 @@ export function getFairPriceIcon(
 
     case "high":
       return "🔴";
+
+    case "not-independent":
+      return "⚪";
 
     default:
       return "🔵";

@@ -275,17 +275,17 @@ export default function ProductCard({
                       {offer.store}
                     </div>
 
-                    {offer.isVerified && (
-                      <div
-                        style={{
-                          color: "#888",
-                          fontSize: 10,
-                          marginTop: 4,
-                        }}
-                      >
-                        ✓ مصدر موثق
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        color: "#d97706",
+                        fontSize: 10,
+                        marginTop: 4,
+                      }}
+                    >
+                      {offer.isVerified
+                        ? "✓ سعر موثق"
+                        : "مُدخل يدويًا · غير موثق"}
+                    </div>
                   </div>
 
                   <div

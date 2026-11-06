@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   ArrowRight,
   ExternalLink,
@@ -14,6 +16,7 @@ import {
 } from "@/app/data/priceUtils";
 
 import brands, { type CarModel } from "@/app/data/cars";
+import { TRUST_TEXT } from "@/app/lib/trust";
 
 const brandNameAr: Record<string, string> = {
   toyota: "تويوتا",
@@ -88,6 +91,42 @@ function formatPrice(price: number) {
   }).format(Math.round(price));
 }
 
+export function generateStaticParams() {
+  return Object.keys(brands).map((brand) => ({ brand }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ brand: string }>;
+}): Promise<Metadata> {
+  const { brand: brandParam } = await params;
+  const brandId = brandParam.toLowerCase();
+  const brand = brands[brandId];
+
+  if (!brand) {
+    return { title: "العلامة غير موجودة", robots: { index: false } };
+  }
+
+  const nameAr = brandNameAr[brandId] ?? brand.name;
+  const title = `أسعار سيارات ${nameAr} في السعودية`;
+  const description = `أسعار مرجعية لـ ${brand.models.length} موديل من ${nameAr} (${brand.name}) في السعودية مع مقارنة السوق. الأسعار مرجعية وغير موثقة بعد.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/cars/${brandId}` },
+    openGraph: {
+      title,
+      description,
+      url: `/cars/${brandId}`,
+      siteName: "TruePrice",
+      locale: "ar_SA",
+      type: "website",
+    },
+  };
+}
+
 export default async function Page({
   params,
 }: {
@@ -99,33 +138,7 @@ export default async function Page({
   const brand = brands[brandId];
 
   if (!brand) {
-    return (
-      <main
-        dir="rtl"
-        style={{
-          minHeight: "100vh",
-          background: "#080D14",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <h1>العلامة غير موجودة</h1>
-
-          <Link
-            href="/cars"
-            style={{
-              color: "#34D399",
-              textDecoration: "none",
-            }}
-          >
-            العودة إلى السيارات
-          </Link>
-        </div>
-      </main>
-    );
+    notFound();
   }
 
   return (
@@ -194,7 +207,7 @@ export default async function Page({
                 }}
               >
                 <ShieldCheck size={17} />
-                بيانات أسعار منشورة
+                بيانات مرجعية غير موثقة بعد
               </div>
 
               <h1
@@ -340,7 +353,7 @@ export default async function Page({
                       marginBottom: 6,
                     }}
                   >
-                    السعر المنشور من المصدر
+                    السعر المرجعي
                   </div>
 
                   <div
@@ -374,7 +387,19 @@ export default async function Page({
                       marginTop: 7,
                     }}
                   >
-                    المصدر: {brand.sourceName}
+                    المصدر المذكور: {brand.sourceName}
+                  </div>
+
+                  <div
+                    style={{
+                      color: "#94A3B8",
+                      fontSize: 11,
+                      marginTop: 4,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {TRUST_TEXT.carPriceSourceUnconfirmed}{" "}
+                    {TRUST_TEXT.dateUnconfirmed}.
                   </div>
                 </div>
 
@@ -605,8 +630,9 @@ export default async function Page({
                           marginTop: 8,
                         }}
                       >
-                        محسوب من بيانات سوقية منشورة
-                        من {fair.sourceCount} مصادر مستقلة.
+                        تقدير أولي (الوسيط) من بيانات منشورة
+                        في {fair.sourceCount} مصادر، لم يتم التحقق
+                        منها بعد.
                       </div>
                     </>
                   ) : (
@@ -621,6 +647,22 @@ export default async function Page({
                       >
                         لا نعرض رقمًا تقديريًا للسعر العادل.
                       </div>
+
+                      {fair.status === "not-independent" && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            color: "#FCD34D",
+                            fontSize: 12,
+                            lineHeight: 1.7,
+                          }}
+                        >
+                          {getFairPriceIcon(fair.status)} السعر
+                          متطابق حرفيًا في جميع المصادر، لذلك لا
+                          يمكن التأكد من أنها مصادر مستقلة. السعر
+                          العادل مخفي حتى تتم مراجعتها.
+                        </div>
+                      )}
 
                       <div
                         style={{

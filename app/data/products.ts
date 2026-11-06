@@ -1,10 +1,17 @@
+import type { VerificationStatus } from "../lib/trust";
+
 export type PriceOffer = {
   store: string;
   storeAr: string;
   price: number;
   url: string;
+  /** لا يوجد أي سعر موثق حاليًا — انظر app/lib/trust.ts */
   isVerified: boolean;
+  verificationStatus: VerificationStatus;
+  entryMethod: "manual";
   checkedAt: string;
+  /** تاريخ الجمع لم يُثبت بمصدر بعد */
+  dateConfirmed: boolean;
 };
 
 export type Product = {
@@ -35,8 +42,13 @@ export type Product = {
   refreshRate?: string;
   officialPrice?: number;
   lastUpdated?: string;
+  lastUpdatedConfirmed?: boolean;
 };
 
+/**
+ * تاريخ الإدخال المسجّل للأسعار. لم يتم إثبات مصدره أو تاريخ جمعه،
+ * لذلك يُعرض دائمًا بوصفه "غير مؤكد".
+ */
 const CHECKED_AT = "2026-08-27";
 
 function offer(
@@ -50,8 +62,11 @@ function offer(
     storeAr,
     price,
     url,
-    isVerified: true,
+    isVerified: false,
+    verificationStatus: "unverified",
+    entryMethod: "manual",
     checkedAt: CHECKED_AT,
+    dateConfirmed: false,
   };
 }
 
@@ -105,6 +120,7 @@ function makeProduct(
     confidence: Math.min(100, 50 + offers.length * 15),
     offers,
     lastUpdated: CHECKED_AT,
+    lastUpdatedConfirmed: false,
     ...extra,
   };
 }
