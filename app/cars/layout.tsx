@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "أسعار السيارات الجديدة في السعودية",
+  title: {
+    default: "أسعار السيارات الجديدة في السعودية",
+    template: "%s | TruePrice",
+  },
   description:
     "مرجع أسعار السيارات الجديدة في السعودية حسب العلامة والموديل، مع مقارنة السوق. الأسعار مرجعية وغير موثقة بعد.",
   alternates: { canonical: "/cars" },

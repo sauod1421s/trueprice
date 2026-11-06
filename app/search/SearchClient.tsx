@@ -1,12 +1,17 @@
 "use client";
 
-import Link from "next/link";
+import { Search, SearchX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import ProductCard from "../components/ProductCard";
+import { TrustNote } from "../components/ui";
 import products from "../data/products";
 import { searchProducts } from "../lib/search";
 import { TRUST_TEXT } from "../lib/trust";
-import { electronicsFairPrice } from "../lib/valuation/electronics";
+
+const categories = Array.from(
+  new Map(products.map((p) => [p.category, p.categoryAr])).entries()
+);
 
 export default function SearchClient({
   initialQuery = "",
@@ -33,389 +38,109 @@ export default function SearchClient({
     );
   }, [query, category]);
 
-  const categories = Array.from(
-    new Map(products.map((p) => [p.category, p.categoryAr])).entries()
-  );
+  const chip = (active: boolean) =>
+    `inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm transition-colors ${
+      active
+        ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
+        : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+    }`;
 
   return (
-    <main
-      dir="rtl"
-      style={{
-        minHeight: "100vh",
-        background: "#050505",
-        color: "#fff",
-        padding: "30px 20px",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1200,
-          margin: "0 auto",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 34,
-            marginBottom: 10,
-          }}
-        >
-          البحث في TruePrice
-        </h1>
+    <main>
+      <section className="border-b border-line bg-surface/30">
+        <div className="container-page py-8 sm:py-10">
+          <h1 className="text-2xl font-bold sm:text-3xl">البحث في TruePrice</h1>
+          <p className="mt-1 text-ink-2">ابحث عن أي جهاز أو شركة أو فئة</p>
 
-        <p
-          style={{
-            color: "#aaa",
-            marginBottom: 25,
-          }}
-        >
-          ابحث عن أي جهاز أو شركة أو فئة
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            marginBottom: 30,
-          }}
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
+          <form
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
             }}
-            aria-label="البحث عن منتج"
-            placeholder="مثال: آيفون، سامسونج، آيباد، شاومي..."
-            style={{
-              flex: 1,
-              minWidth: 280,
-              padding: "16px 18px",
-              borderRadius: 12,
-              border: "1px solid #333",
-              background: "#111",
-              color: "#fff",
-              fontSize: 16,
-              outline: "none",
-            }}
-          />
-
-          <button
-            onClick={submit}
-            style={{
-              padding: "0 25px",
-              borderRadius: 12,
-              border: "none",
-              background: "#fff",
-              color: "#000",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
+            className="mt-5 flex items-center gap-2 rounded-2xl border border-line-strong bg-surface p-1.5 transition-colors focus-within:border-brand/60"
           >
-            بحث
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 30,
-          }}
-        >
-          <button
-            onClick={() => setCategory("all")}
-            style={{
-              padding: "9px 15px",
-              borderRadius: 20,
-              border: "1px solid #444",
-              background: category === "all" ? "#fff" : "#111",
-              color: category === "all" ? "#000" : "#fff",
-              cursor: "pointer",
-            }}
-          >
-            الكل
-          </button>
-
-          {categories.map(([cat, catAr]) => (
+            <Search size={19} className="ms-2.5 shrink-0 text-ink-3" aria-hidden />
+            <input
+              type="search"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="مثال: آيفون، سامسونج، آيباد، شاومي..."
+              aria-label="البحث عن منتج"
+              enterKeyHint="search"
+              className="h-11 min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-3"
+            />
             <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              style={{
-                padding: "9px 15px",
-                borderRadius: 20,
-                border: "1px solid #444",
-                background: category === cat ? "#fff" : "#111",
-                color: category === cat ? "#000" : "#fff",
-                cursor: "pointer",
-              }}
+              type="submit"
+              className="h-11 shrink-0 rounded-xl bg-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-strong sm:px-7"
             >
-              {catAr}
+              بحث
             </button>
-          ))}
+          </form>
+
+          <div className="scroll-x -mx-4 mt-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex gap-2" role="group" aria-label="تصفية حسب الفئة">
+              <button
+                type="button"
+                aria-pressed={category === "all"}
+                onClick={() => setCategory("all")}
+                className={chip(category === "all")}
+              >
+                الكل
+              </button>
+              {categories.map(([cat, catAr]) => (
+                <button
+                  key={cat}
+                  type="button"
+                  aria-pressed={category === cat}
+                  onClick={() => setCategory(cat)}
+                  className={chip(category === cat)}
+                >
+                  {catAr}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="container-page py-6 sm:py-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-3" aria-live="polite">
+          <span>
+            عدد النتائج:{" "}
+            <strong className="num text-ink">{results.length}</strong>
+            {query && (
+              <>
+                {" "}
+                لـ «<span className="text-ink">{query}</span>»
+              </>
+            )}
+          </span>
         </div>
 
-        <div
-          style={{
-            marginBottom: 20,
-            color: "#aaa",
-          }}
-        >
-          عدد النتائج:{" "}
-          <strong style={{ color: "#fff" }}>
-            {results.length}
-          </strong>
-          {query && (
-            <>
-              {" "}
-              لـ «<span style={{ color: "#fff" }}>{query}</span>»
-            </>
-          )}
-        </div>
-
-        <div
-          role="note"
-          style={{
-            marginBottom: 20,
-            padding: "10px 14px",
-            borderRadius: 12,
-            background: "#1c1503",
-            border: "1px solid #4a3a0a",
-            color: "#fcd34d",
-            fontSize: 13,
-            lineHeight: 1.8,
-          }}
-        >
-          ⚠️ جميع الأسعار {TRUST_TEXT.manualEntry} و{TRUST_TEXT.unverified}،
-          و{TRUST_TEXT.dateUnconfirmed}. تحقّق من السعر لدى المتجر قبل الشراء.
-        </div>
+        <TrustNote className="mb-6">
+          جميع الأسعار {TRUST_TEXT.manualEntry} و{TRUST_TEXT.unverified}، و
+          {TRUST_TEXT.dateUnconfirmed}. تحقّق من السعر لدى المتجر قبل الشراء.
+        </TrustNote>
 
         {results.length === 0 ? (
-          <div
-            style={{
-              padding: 40,
-              background: "#111",
-              border: "1px solid #222",
-              borderRadius: 18,
-              textAlign: "center",
-              color: "#aaa",
-            }}
-          >
-            لا توجد منتجات مطابقة للبحث. جرّب كلمات أقل أو اسم الشركة فقط
-            (مثال: «سامسونج» أو «iPhone»).
+          <div className="card flex flex-col items-center px-6 py-12 text-center">
+            <SearchX size={36} className="text-ink-3" aria-hidden />
+            <p className="mt-3 font-medium">لا توجد منتجات مطابقة للبحث.</p>
+            <p className="mt-1 text-sm text-ink-3">
+              جرّب كلمات أقل أو اسم الشركة فقط (مثال: «سامسونج» أو «iPhone»).
+            </p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: 18,
-            }}
-          >
-            {results.map((product) => {
-              const lowestPrice = product.lowestPrice ?? 0;
-              const highestPrice = product.highestPrice ?? 0;
-              const averagePrice = product.averagePrice ?? 0;
-              // من الأسعار الموثقة فقط؛ مخفي ما دامت كل الأسعار غير موثقة
-              const fairPrice = electronicsFairPrice(product.offers).fairPrice;
-
-              return (
-                <div
-                  key={product.id}
-                  style={{
-                    background: "#111",
-                    border: "1px solid #252525",
-                    borderRadius: 18,
-                    padding: 20,
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "#999",
-                      fontSize: 13,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {product.brandAr} • {product.categoryAr}
-                  </div>
-
-                  <h2
-                    style={{
-                      fontSize: 20,
-                      margin: "0 0 8px",
-                    }}
-                  >
-                    <Link
-                      href={`/product/${product.id}`}
-                      style={{ color: "#fff", textDecoration: "none" }}
-                    >
-                      {product.nameAr}
-                    </Link>
-                  </h2>
-
-                  <div
-                    style={{
-                      color: "#999",
-                      fontSize: 14,
-                      marginBottom: 18,
-                    }}
-                  >
-                    {product.name}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
-                      marginBottom: 18,
-                    }}
-                  >
-                    <div>
-                      <small style={{ color: "#777" }}>
-                        أقل سعر
-                      </small>
-                      <div>
-                        {lowestPrice.toLocaleString("ar-SA")} ريال
-                      </div>
-                    </div>
-
-                    <div>
-                      <small style={{ color: "#777" }}>
-                        أعلى سعر
-                      </small>
-                      <div>
-                        {highestPrice.toLocaleString("ar-SA")} ريال
-                      </div>
-                    </div>
-
-                    <div>
-                      <small style={{ color: "#777" }}>
-                        المتوسط
-                      </small>
-                      <div>
-                        {averagePrice.toLocaleString("ar-SA")} ريال
-                      </div>
-                    </div>
-
-                    <div>
-                      <small style={{ color: "#777" }}>
-                        السعر العادل
-                      </small>
-                      <div style={{ fontWeight: "bold" }}>
-                        {fairPrice !== null
-                          ? `${fairPrice.toLocaleString("ar-SA")} ريال`
-                          : "مخفي حتى التحقق"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#777",
-                      fontSize: 13,
-                      marginBottom: 15,
-                    }}
-                  >
-                    {product.storage !== "—" &&
-                      `التخزين: ${product.storage}`}
-
-                    {product.memory !== "—" &&
-                      ` • الذاكرة: ${product.memory}`}
-                  </div>
-
-                  <div
-                    style={{
-                      borderTop: "1px solid #222",
-                      paddingTop: 15,
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "#aaa",
-                        fontSize: 13,
-                        marginBottom: 10,
-                      }}
-                    >
-                      مراجع الأسعار: {product.offers.length}
-                    </div>
-
-                    {product.offers.length === 0 ? (
-                      <div
-                        style={{
-                          color: "#666",
-                          fontSize: 13,
-                        }}
-                      >
-                        لا توجد أسعار متاحة حاليًا
-                      </div>
-                    ) : (
-                      product.offers.map((offer, index) => {
-                        const offerPrice = offer.price ?? null;
-
-                        return (
-                          <a
-                            key={`${product.id}-${index}`}
-                            href={offer.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 10,
-                              padding: "8px 0",
-                              color: "#fff",
-                              textDecoration: "none",
-                              borderBottom:
-                                index <
-                                product.offers.length - 1
-                                  ? "1px solid #1d1d1d"
-                                  : "none",
-                            }}
-                          >
-                            <span>
-                              {offer.storeAr}
-                            </span>
-
-                            <strong>
-                              {offerPrice !== null
-                                ? `${offerPrice.toLocaleString(
-                                    "ar-SA"
-                                  )} ريال`
-                                : "السعر غير متاح حاليًا"}
-                            </strong>
-                          </a>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <Link
-                    href={`/product/${product.id}`}
-                    style={{
-                      display: "block",
-                      marginTop: 14,
-                      textAlign: "center",
-                      padding: 11,
-                      borderRadius: 10,
-                      background: "#1b1b1b",
-                      color: "#fff",
-                      textDecoration: "none",
-                      fontSize: 14,
-                      fontWeight: 600,
-                    }}
-                  >
-                    عرض التفاصيل والمقارنة
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {results.map((product) => (
+              <li key={product.id}>
+                <ProductCard product={product} />
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+      </section>
     </main>
   );
 }

@@ -1,399 +1,124 @@
-"use client";
-
+import { ChevronDown, ChevronLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import type { VerificationStatus } from "../lib/trust";
+import type { Product } from "../data/products";
 import { electronicsFairPrice } from "../lib/valuation/electronics";
+import { Badge, Price, ProductVisual } from "./ui";
 
-type PriceOffer = {
-  store: string;
-  storeAr: string;
-  price: number;
-  url: string;
-  isVerified?: boolean;
-  verificationStatus?: VerificationStatus;
-  checkedAt?: string;
-};
+const HIDDEN_MEMORY = new Set(["—", "", "غير معلن رسميًا من Apple"]);
 
-type Product = {
-  id: number;
-  name: string;
-  nameAr: string;
-  brand: string;
-  brandAr: string;
-  category: string;
-  categoryAr: string;
-  memory: string;
-  storage: string;
-  averagePrice: number;
-  lowestPrice: number;
-  highestPrice: number;
-  fairPrice: number;
-  offers: PriceOffer[];
-  screen?: string;
-  chip?: string;
-  camera?: string;
-};
+export default function ProductCard({ product }: { product: Product }) {
+  // السعر العادل من الأسعار الموثقة فقط — لا يُعرض إذا لم تتوفر بيانات موثوقة
+  const fair = electronicsFairPrice(product.offers);
+  const verified = product.offers.length > 0 &&
+    product.offers.every((o) => o.verificationStatus === "verified");
+  const hasPrices = product.offers.length > 0;
 
-export default function ProductCard({
-  product,
-}: {
-  product: Product;
-}) {
   return (
-    <article
-      style={{
-        background: "#111",
-        border: "1px solid #292929",
-        borderRadius: 20,
-        padding: 22,
-        color: "#fff",
-        direction: "rtl",
-      }}
-    >
-      {/* اسم المنتج */}
-      <Link
-        href={`/product/${product.id}`}
-        style={{
-          display: "block",
-          color: "#fff",
-          textDecoration: "none",
-          marginBottom: 18,
-        }}
-      >
-        <div
-          style={{
-            color: "#777",
-            fontSize: 13,
-            marginBottom: 7,
-          }}
-        >
-          {product.brandAr} • {product.categoryAr}
+    <article className="card card-hover flex h-full flex-col p-4">
+      {/* الرأس */}
+      <div className="flex gap-3">
+        <ProductVisual category={product.category} className="size-16 shrink-0" size={30} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs text-ink-3">
+            {product.brandAr} · {product.categoryAr}
+          </div>
+          <h2 className="mt-0.5 line-clamp-2 font-semibold leading-snug">
+            <Link href={`/product/${product.id}`} className="hover:text-brand-soft">
+              {product.nameAr}
+            </Link>
+          </h2>
+          <div className="mt-0.5 truncate text-xs text-ink-3" dir="ltr" style={{ textAlign: "right" }}>
+            {product.name}
+          </div>
         </div>
-
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 21,
-            fontWeight: 700,
-          }}
-        >
-          {product.nameAr}
-        </h2>
-
-        <div
-          style={{
-            color: "#777",
-            fontSize: 13,
-            marginTop: 6,
-            direction: "ltr",
-            textAlign: "right",
-          }}
-        >
-          {product.name}
-        </div>
-      </Link>
-
-      {/* المواصفات */}
-      {(product.storage !== "—" ||
-        product.memory !== "—" ||
-        product.screen ||
-        product.chip ||
-        product.camera) && (
-        <div
-          style={{
-            background: "#0b0b0b",
-            borderRadius: 12,
-            padding: 12,
-            marginBottom: 16,
-            fontSize: 13,
-            color: "#aaa",
-            lineHeight: 1.9,
-          }}
-        >
-          {product.storage !== "—" && (
-            <div>
-              التخزين:{" "}
-              <strong style={{ color: "#fff" }}>
-                {product.storage}
-              </strong>
-            </div>
-          )}
-
-          {product.memory !== "—" && (
-            <div>
-              الذاكرة:{" "}
-              <strong style={{ color: "#fff" }}>
-                {product.memory}
-              </strong>
-            </div>
-          )}
-
-          {product.screen && (
-            <div>
-              الشاشة:{" "}
-              <strong style={{ color: "#fff" }}>
-                {product.screen}
-              </strong>
-            </div>
-          )}
-
-          {product.chip && (
-            <div>
-              المعالج:{" "}
-              <strong style={{ color: "#fff" }}>
-                {product.chip}
-              </strong>
-            </div>
-          )}
-
-          {product.camera && (
-            <div>
-              الكاميرا:{" "}
-              <strong style={{ color: "#fff" }}>
-                {product.camera}
-              </strong>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* الأسعار */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 8,
-          marginBottom: 18,
-        }}
-      >
-        <PriceBox
-          title="أقل سعر"
-          value={product.lowestPrice}
-        />
-
-        <PriceBox
-          title="أعلى سعر"
-          value={product.highestPrice}
-        />
-
-        <PriceBox
-          title="متوسط السعر"
-          value={product.averagePrice}
-        />
-
-        <PriceBox
-          title="السعر العادل"
-          value={electronicsFairPrice(product.offers).fairPrice}
-          highlight
-        />
       </div>
 
-      {/* مراجع الأسعار */}
-      <div
-        style={{
-          borderTop: "1px solid #292929",
-          paddingTop: 18,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <strong style={{ fontSize: 16 }}>
-            مراجع الأسعار
-          </strong>
+      {/* السعة والذاكرة وحالة البيانات */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {product.storage && product.storage !== "—" && (
+          <Badge>التخزين {product.storage}</Badge>
+        )}
+        {!HIDDEN_MEMORY.has(product.memory) && <Badge>الذاكرة {product.memory}</Badge>}
+        {hasPrices && (
+          <Badge tone={verified ? "brand" : "warn"}>{verified ? "موثق" : "غير موثق"}</Badge>
+        )}
+      </div>
 
-          <span
-            style={{
-              background: "#222",
-              color: "#aaa",
-              padding: "5px 9px",
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-          >
-            {product.offers.length}{" "}
-            {product.offers.length === 1 ? "مرجع" : "مراجع"}
-          </span>
-        </div>
-
-        {product.offers.length === 0 ? (
-          <div
-            style={{
-              color: "#777",
-              padding: 12,
-              background: "#0b0b0b",
-              borderRadius: 10,
-            }}
-          >
-            لا توجد أسعار متاحة حاليًا
+      {/* الأسعار */}
+      {hasPrices ? (
+        <div className="mt-4 rounded-xl bg-surface-2 p-3">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <div className="text-xs text-ink-3">أقل سعر مرجعي</div>
+              <div className="text-xl font-bold leading-tight">
+                <Price value={product.lowestPrice} />
+              </div>
+            </div>
+            <div className="text-left text-xs leading-5 text-ink-3">
+              <div>
+                حتى <Price value={product.highestPrice} className="text-ink-2" unitClassName="" />
+              </div>
+              <div>
+                المتوسط <Price value={product.averagePrice} className="text-ink-2" unitClassName="" />
+              </div>
+            </div>
           </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
+
+          {fair.fairPrice !== null && (
+            <div className="mt-2 flex items-center justify-between border-t border-line pt-2 text-sm">
+              <span className="text-brand-soft">السعر العادل</span>
+              <Price value={fair.fairPrice} className="font-semibold text-brand-soft" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-surface-2 p-3 text-sm text-ink-3">
+          لا توجد أسعار متاحة حاليًا
+        </p>
+      )}
+
+      {/* مراجع الأسعار */}
+      {hasPrices && (
+        <details className="group mt-3 rounded-lg border border-line">
+          <summary className="flex min-h-11 items-center justify-between gap-2 px-3 text-sm text-ink-2 transition-colors hover:text-ink">
+            <span>مراجع الأسعار</span>
+            <span className="inline-flex items-center gap-1 text-xs text-ink-3">
+              <span className="num">
+                {product.offers.length} {product.offers.length === 1 ? "مرجع" : "مراجع"}
+              </span>
+              <ChevronDown size={15} className="transition-transform group-open:rotate-180" aria-hidden />
+            </span>
+          </summary>
+          <ul className="divide-y divide-line border-t border-line px-3">
             {product.offers.map((offer, index) => (
-              <div
-                key={`${product.id}-${offer.store}-${index}`}
-                style={{
-                  background: "#0b0b0b",
-                  border: "1px solid #202020",
-                  borderRadius: 12,
-                  padding: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 14,
-                      }}
-                    >
-                      {offer.storeAr}
-                    </div>
-
-                    <div
-                      style={{
-                        color: "#666",
-                        fontSize: 11,
-                        marginTop: 3,
-                      }}
-                    >
-                      {offer.store}
-                    </div>
-
-                    <div
-                      style={{
-                        color: "#d97706",
-                        fontSize: 10,
-                        marginTop: 4,
-                      }}
-                    >
-                      {offer.isVerified
-                        ? "✓ سعر موثق"
-                        : "مُدخل يدويًا · غير موثق"}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      textAlign: "left",
-                    }}
-                  >
-                    <strong
-                      style={{
-                        fontSize: 17,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {offer.price.toLocaleString("ar-SA")} ر.س
-                    </strong>
-                  </div>
-                </div>
-
-                {/* رابط المرجع */}
+              <li key={`${product.id}-${offer.store}-${index}`}>
                 <a
                   href={offer.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    display: "block",
-                    marginTop: 10,
-                    background: "#fff",
-                    color: "#000",
-                    textDecoration: "none",
-                    textAlign: "center",
-                    padding: "9px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
+                  aria-label={`فتح المرجع في متجر ${offer.storeAr}`}
+                  className="flex min-h-10 items-center justify-between gap-2 text-sm text-ink-2 transition-colors hover:text-ink"
                 >
-                  فتح المرجع في المتجر
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{offer.storeAr}</span>
+                    <ExternalLink size={12} className="shrink-0 text-ink-3" aria-hidden />
+                  </span>
+                  <Price value={offer.price} className="font-medium text-ink" />
                 </a>
-              </div>
+              </li>
             ))}
-          </div>
-        )}
-      </div>
+          </ul>
+        </details>
+      )}
 
-      {/* تفاصيل المنتج */}
+      <div className="flex-1" />
       <Link
         href={`/product/${product.id}`}
-        style={{
-          display: "block",
-          marginTop: 16,
-          textAlign: "center",
-          padding: 12,
-          borderRadius: 10,
-          background: "#1b1b1b",
-          color: "#fff",
-          textDecoration: "none",
-          fontSize: 14,
-          fontWeight: 600,
-        }}
+        className="mt-4 flex min-h-11 items-center justify-center gap-1 rounded-lg border border-line-strong text-sm font-medium text-ink transition-colors hover:border-brand/50 hover:text-brand-soft"
       >
-        عرض تفاصيل المنتج والمقارنة
+        عرض التفاصيل والمقارنة
+        <ChevronLeft size={16} aria-hidden />
       </Link>
     </article>
-  );
-}
-
-function PriceBox({
-  title,
-  value,
-  highlight = false,
-}: {
-  title: string;
-  value: number | null;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: highlight ? "#171717" : "#0b0b0b",
-        border: highlight
-          ? "1px solid #444"
-          : "1px solid #202020",
-        borderRadius: 12,
-        padding: 12,
-      }}
-    >
-      <div
-        style={{
-          color: "#777",
-          fontSize: 11,
-          marginBottom: 5,
-        }}
-      >
-        {title}
-      </div>
-
-      <strong
-        style={{
-          fontSize: 15,
-        }}
-      >
-        {value !== null
-          ? `${value.toLocaleString("ar-SA")} ر.س`
-          : "مخفي حتى التحقق"}
-      </strong>
-    </div>
   );
 }

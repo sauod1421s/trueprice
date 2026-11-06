@@ -2,66 +2,39 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  ArrowRight,
-  ExternalLink,
-  ShieldCheck,
-  Scale,
+  ChevronDown,
+  ChevronLeft,
   Database,
+  ExternalLink,
+  Scale,
+  ShieldCheck,
 } from "lucide-react";
 
 import {
   calculateFairPrice,
   getFairPriceIcon,
   getFairPriceLabel,
+  type FairPriceResult,
 } from "@/app/data/priceUtils";
 
 import brands, { type CarModel } from "@/app/data/cars";
+import { Badge, BrandMonogram, Price, TrustNote } from "@/app/components/ui";
+import { brandInitial, brandNameAr, brandSummaries } from "@/app/lib/carBrands";
 import { TRUST_TEXT } from "@/app/lib/trust";
 
-const brandNameAr: Record<string, string> = {
-  toyota: "تويوتا",
-  hyundai: "هيونداي",
-  kia: "كيا",
-  nissan: "نيسان",
-  mg: "MG",
-  ford: "فورد",
-  honda: "هوندا",
-  mazda: "مازدا",
-  suzuki: "سوزوكي",
-  isuzu: "إيسوزو",
-  changan: "شانجان",
-  geely: "جيلي",
-  gac: "GAC",
-  haval: "هافال",
-  jetour: "جيتور",
-  chery: "شيري",
-  chevrolet: "شفروليه",
-  gmc: "GMC",
-  mitsubishi: "ميتسوبيشي",
-  jeep: "جيب",
-  lexus: "لكزس",
-  bmw: "BMW",
-  mercedes: "مرسيدس",
-  audi: "أودي",
-  volkswagen: "فولكس واجن",
-  byd: "BYD",
-  exeed: "إكسيد",
-  hongqi: "هونشي",
-  greatwall: "جريت وول",
-  tank: "تانك",
-  jac: "جاك",
-  mahindra: "ماهيندرا",
-  renault: "رينو",
-  peugeot: "بيجو",
-  landrover: "لاند روفر",
-  volvo: "فولفو",
-  porsche: "بورشه",
-  tesla: "تسلا",
-  lucid: "لوسيد",
-  genesis: "جينيسيس",
+const MARKET_SOURCE_NAMES: Record<string, string> = {
+  motory: "موتري",
+  syarah: "سيارة",
+  hatla2ee: "هتلاقي",
 };
 
-function getFairPrice(car: CarModel) {
+const MARKET_REFERENCES = [
+  { name: "موتري", url: "https://ksa.motory.com/ar/" },
+  { name: "سيارة", url: "https://syarah.com/" },
+  { name: "هتلاقي", url: "https://ksa.hatla2ee.com/ar/" },
+];
+
+function getFairPrice(car: CarModel): FairPriceResult {
   if (typeof car.price !== "number") {
     return {
       fairPrice: null,
@@ -71,24 +44,13 @@ function getFairPrice(car: CarModel) {
       marketCount: 0,
       sourceCount: 0,
       sources: [],
-      status: "not-enough-data" as const,
+      status: "not-enough-data",
       difference: null,
       differencePercent: null,
     };
   }
 
-  return calculateFairPrice(
-    car.name,
-    car.year,
-    car.price,
-    car.trim
-  );
-}
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat("ar-SA", {
-    maximumFractionDigits: 0,
-  }).format(Math.round(price));
+  return calculateFairPrice(car.name, car.year, car.price, car.trim);
 }
 
 export function generateStaticParams() {
@@ -141,673 +103,305 @@ export default async function Page({
     notFound();
   }
 
+  const nameAr = brandNameAr[brandId] ?? brand.name;
+
   return (
-    <main
-      dir="rtl"
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top,#142333 0%,#080D14 45%,#060A10 100%)",
-        color: "#fff",
-        paddingBottom: 80,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1350,
-          margin: "0 auto",
-          padding: "30px 22px",
-        }}
-      >
-        <Link
-          href="/cars"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            color: "#A7B4C4",
-            textDecoration: "none",
-            fontSize: 16,
-            marginBottom: 30,
-          }}
-        >
-          <ArrowRight size={19} />
-          جميع السيارات
-        </Link>
+    <main>
+      {/* ================= BRAND SWITCHER ================= */}
+      <nav aria-label="العلامات التجارية" className="border-b border-line bg-surface/40">
+        <div className="container-page">
+          <div className="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0">
+            <ul className="flex gap-1.5 py-2.5">
+              <li className="shrink-0">
+                <Link
+                  href="/cars"
+                  className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-sm text-ink-2 hover:text-ink"
+                >
+                  جميع السيارات
+                </Link>
+              </li>
+              {brandSummaries.map((b) => {
+                const active = b.id === brandId;
+                return (
+                  <li key={b.id} className="shrink-0">
+                    <Link
+                      href={`/cars/${b.id}`}
+                      aria-current={active ? "page" : undefined}
+                      className={`inline-flex h-9 items-center rounded-full border px-3 text-sm transition-colors ${
+                        active
+                          ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
+                          : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+                      }`}
+                    >
+                      {b.nameAr}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </nav>
 
-        {/* HERO */}
-        <section
-          style={{
-            background:
-              "linear-gradient(135deg,#101C29,#0D1722)",
-            border: "1px solid #243244",
-            borderRadius: 26,
-            padding: "40px 34px",
-            marginBottom: 28,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 25,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  color: "#6EE7B7",
-                  fontSize: 14,
-                  marginBottom: 15,
-                }}
-              >
-                <ShieldCheck size={17} />
-                بيانات مرجعية غير موثقة بعد
+      <div className="container-page py-6 sm:py-10">
+        {/* ================= BREADCRUMB ================= */}
+        <ol className="mb-5 flex items-center gap-1 text-sm text-ink-3">
+          <li>
+            <Link href="/cars" className="hover:text-ink">
+              السيارات
+            </Link>
+          </li>
+          <li aria-hidden>
+            <ChevronLeft size={14} />
+          </li>
+          <li className="text-ink-2" aria-current="page">
+            {nameAr}
+          </li>
+        </ol>
+
+        {/* ================= HERO ================= */}
+        <section className="card flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div className="flex min-w-0 items-center gap-4">
+            <BrandMonogram label={brandInitial(brand.name)} className="size-14 rounded-xl text-lg" />
+            <div className="min-w-0">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Badge tone="warn">
+                  <ShieldCheck size={13} aria-hidden />
+                  بيانات مرجعية غير موثقة بعد
+                </Badge>
               </div>
-
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: "clamp(42px,6vw,68px)",
-                  fontWeight: 900,
-                }}
-              >
-                {brand.name}
+              <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
+                {nameAr}{" "}
+                <span className="text-lg font-medium text-ink-3" dir="ltr">
+                  {brand.name}
+                </span>
               </h1>
-
-              <p
-                style={{
-                  color: "#AAB7C6",
-                  fontSize: 20,
-                  lineHeight: 1.8,
-                  margin: "12px 0 0",
-                }}
-              >
-                {brand.description}
-              </p>
-            </div>
-
-            <div
-              style={{
-                background: "#09111A",
-                border: "1px solid #263647",
-                borderRadius: 18,
-                padding: "18px 28px",
-                minWidth: 150,
-                textAlign: "center",
-              }}
-            >
-              <div
-                style={{
-                  color: "#8191A4",
-                  fontSize: 14,
-                }}
-              >
-                عدد الموديلات
-              </div>
-
-              <div
-                style={{
-                  fontSize: 34,
-                  fontWeight: 900,
-                  marginTop: 5,
-                }}
-              >
-                {brand.models.length}
-              </div>
+              <p className="mt-1 text-sm leading-7 text-ink-2">{brand.description}</p>
             </div>
           </div>
+
+          <dl className="flex shrink-0 gap-6 border-t border-line pt-4 sm:border-0 sm:pt-0">
+            <div>
+              <dt className="text-xs text-ink-3">عدد الموديلات</dt>
+              <dd className="num text-2xl font-bold">{brand.models.length}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-3">المصدر المذكور</dt>
+              <dd className="mt-1 text-sm font-medium text-ink-2">{brand.sourceName}</dd>
+            </div>
+          </dl>
         </section>
 
-        {/* CARS */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit,minmax(330px,1fr))",
-            gap: 22,
-          }}
-        >
-          {brand.models.map((car) => {
-            const fair = getFairPrice(car);
+        <TrustNote className="mt-4">
+          الأسعار المعروضة مرجعية. {TRUST_TEXT.carPriceSourceUnconfirmed}{" "}
+          {TRUST_TEXT.dateUnconfirmed}.
+        </TrustNote>
 
-            return (
-              <article
-                key={`${car.name}-${car.year}-${car.trim ?? "base"}`}
-                style={{
-                  background:
-                    "linear-gradient(145deg,#111D2A,#0C151F)",
-                  border: "1px solid #263646",
-                  borderRadius: 24,
-                  padding: 26,
-                  boxShadow:
-                    "0 14px 35px rgba(0,0,0,0.18)",
-                }}
-              >
-                {/* HEADER */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 15,
-                  }}
-                >
-                  <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: 30,
-                        fontWeight: 900,
-                        color: "#FFFFFF",
-                      }}
-                    >
-                      {car.name}
-                    </h2>
+        {/* ================= MODELS ================= */}
+        <section aria-label={`موديلات ${nameAr}`} className="mt-8">
+          <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {brand.models.map((car) => (
+              <li key={`${car.name}-${car.year}-${car.trim ?? "base"}`}>
+                <ModelCard car={car} sourceName={brand.sourceName} />
+              </li>
+            ))}
+          </ul>
+        </section>
 
-                    <div
-                      style={{
-                        color: "#9AAABC",
-                        fontSize: 15,
-                        marginTop: 8,
-                      }}
-                    >
-                      {car.year}
-                      {car.trim ? ` • ${car.trim}` : ""}
-                    </div>
-                  </div>
-
-                  <span
-                    style={{
-                      background: "#172536",
-                      border: "1px solid #2B3C4F",
-                      borderRadius: 10,
-                      padding: "7px 11px",
-                      fontSize: 12,
-                      color: "#D5DEE8",
-                      fontWeight: 700,
-                    }}
-                  >
-                    جديد
-                  </span>
-                </div>
-
-                {/* OFFICIAL PRICE */}
-                <div
-                  style={{
-                    marginTop: 25,
-                    padding: "20px 0",
-                    borderTop: "1px solid #263646",
-                    borderBottom: "1px solid #263646",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "#8B9BAD",
-                      fontSize: 14,
-                      marginBottom: 6,
-                    }}
-                  >
-                    السعر المرجعي
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 37,
-                      fontWeight: 900,
-                      color: "#FFFFFF",
-                    }}
-                  >
-                    {typeof car.price === "number"
-                      ? formatPrice(car.price)
-                      : "السعر غير متوفر"}
-
-                    {typeof car.price === "number" && (
-                      <span
-                        style={{
-                          fontSize: 16,
-                          color: "#9BA9B8",
-                          marginRight: 7,
-                        }}
-                      >
-                        ريال
-                      </span>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#6EE7B7",
-                      fontSize: 12,
-                      marginTop: 7,
-                    }}
-                  >
-                    المصدر المذكور: {brand.sourceName}
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#94A3B8",
-                      fontSize: 11,
-                      marginTop: 4,
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {TRUST_TEXT.carPriceSourceUnconfirmed}{" "}
-                    {TRUST_TEXT.dateUnconfirmed}.
-                  </div>
-                </div>
-
-                {/* MARKET */}
-                <div
-                  style={{
-                    marginTop: 20,
-                    background:
-                      "linear-gradient(145deg,#0A151F,#09131C)",
-                    border: "1px solid #25384A",
-                    borderRadius: 18,
-                    padding: 19,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      color: "#FFFFFF",
-                      fontSize: 16,
-                      fontWeight: 800,
-                    }}
-                  >
-                    <Scale size={19} />
-                    مقارنة السوق
-                  </div>
-
-                  {fair.marketCount > 0 ? (
-                    <>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit,minmax(150px,1fr))",
-                          gap: 10,
-                          marginTop: 15,
-                        }}
-                      >
-                        {fair.sources.map(
-                          (source, index) => (
-                            <a
-                              key={`${source.source}-${source.price}-${index}`}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                textDecoration: "none",
-                                background: "#111F2C",
-                                border:
-                                  "1px solid #2A3B4D",
-                                borderRadius: 13,
-                                padding: 13,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  color: "#8293A5",
-                                  fontSize: 12,
-                                  marginBottom: 6,
-                                }}
-                              >
-                                {source.source ===
-                                "motory"
-                                  ? "موتري"
-                                  : source.source ===
-                                    "syarah"
-                                  ? "سيارة"
-                                  : "هتلاقي"}
-                              </div>
-
-                              <div
-                                style={{
-                                  color: "#FFFFFF",
-                                  fontSize: 18,
-                                  fontWeight: 900,
-                                }}
-                              >
-                                {formatPrice(
-                                  source.price
-                                )}
-                              </div>
-
-                              <div
-                                style={{
-                                  color: "#6EE7B7",
-                                  fontSize: 11,
-                                  marginTop: 4,
-                                }}
-                              >
-                                فتح المصدر ↗
-                              </div>
-                            </a>
-                          )
-                        )}
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit,minmax(130px,1fr))",
-                          gap: 9,
-                          marginTop: 13,
-                        }}
-                      >
-                        <MarketBox
-                          title="أقل سعر"
-                          value={fair.marketLow}
-                        />
-
-                        <MarketBox
-                          title="أعلى سعر"
-                          value={fair.marketHigh}
-                        />
-
-                        <MarketBox
-                          title="متوسط السوق"
-                          value={fair.marketAverage}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div
-                      style={{
-                        marginTop: 13,
-                        color: "#9AA9B8",
-                        fontSize: 13,
-                        lineHeight: 1.8,
-                      }}
-                    >
-                      لا توجد بيانات سوقية موثقة كافية
-                      لهذا الموديل حاليًا لحساب المقارنة.
-                    </div>
-                  )}
-                </div>
-
-                {/* FAIR PRICE */}
-                <div
-                  style={{
-                    marginTop: 15,
-                    background:
-                      fair.fairPrice !== null
-                        ? "linear-gradient(135deg,#08251D,#0B1917)"
-                        : "#09131D",
-                    border:
-                      fair.fairPrice !== null
-                        ? "1px solid #145C47"
-                        : "1px solid #25384A",
-                    borderRadius: 18,
-                    padding: 19,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      color: "#FFFFFF",
-                      fontSize: 16,
-                      fontWeight: 800,
-                    }}
-                  >
-                    <Scale size={19} />
-                    السعر العادل
-                  </div>
-
-                  {fair.fairPrice !== null ? (
-                    <>
-                      <div
-                        style={{
-                          fontSize: 32,
-                          fontWeight: 900,
-                          color: "#6EE7B7",
-                          marginTop: 9,
-                        }}
-                      >
-                        {formatPrice(fair.fairPrice)}
-
-                        <span
-                          style={{
-                            fontSize: 14,
-                            color: "#8FA0B2",
-                            marginRight: 6,
-                          }}
-                        >
-                          ريال
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: 9,
-                          fontSize: 14,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {getFairPriceIcon(fair.status)}{" "}
-                        {getFairPriceLabel(fair.status)}
-                      </div>
-
-                      {fair.differencePercent !== null && (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            color: "#AAB8C6",
-                            fontSize: 13,
-                          }}
-                        >
-                          الفرق عن السعر العادل:{" "}
-                          {Math.abs(
-                            fair.differencePercent
-                          ).toFixed(1)}
-                          %
-                          {fair.difference !== null &&
-                            (fair.difference > 0
-                              ? " أعلى"
-                              : fair.difference < 0
-                              ? " أقل"
-                              : " مطابق")}
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          color: "#718296",
-                          fontSize: 11,
-                          marginTop: 8,
-                        }}
-                      >
-                        تقدير أولي (الوسيط) من بيانات منشورة
-                        في {fair.sourceCount} مصادر، لم يتم التحقق
-                        منها بعد.
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          marginTop: 12,
-                          color: "#AAB7C5",
-                          fontSize: 14,
-                          lineHeight: 1.8,
-                        }}
-                      >
-                        لا نعرض رقمًا تقديريًا للسعر العادل.
-                      </div>
-
-                      {fair.status === "not-independent" && (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            color: "#FCD34D",
-                            fontSize: 12,
-                            lineHeight: 1.7,
-                          }}
-                        >
-                          {getFairPriceIcon(fair.status)} السعر
-                          متطابق حرفيًا في جميع المصادر، لذلك لا
-                          يمكن التأكد من أنها مصادر مستقلة. السعر
-                          العادل مخفي حتى تتم مراجعتها.
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          marginTop: 6,
-                          color: "#6EE7B7",
-                          fontSize: 12,
-                          lineHeight: 1.7,
-                        }}
-                      >
-                        يظهر السعر العادل فقط بعد توفر
-                        بيانات سوقية كافية من 3 مصادر
-                        مستقلة على الأقل.
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* REFERENCES */}
-                <div
-                  style={{
-                    marginTop: 18,
-                    background: "#0A131D",
-                    borderRadius: 16,
-                    padding: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      color: "#FFFFFF",
-                      fontSize: 14,
-                      fontWeight: 800,
-                    }}
-                  >
-                    <Database size={17} />
-                    المراجع
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit,minmax(150px,1fr))",
-                      gap: 8,
-                      marginTop: 12,
-                    }}
-                  >
-                    <ReferenceLink
-                      number="①"
-                      name={brand.sourceName}
-                      url={brand.sourceUrl}
-                      primary
-                    />
-
-                    <ReferenceLink
-                      number="②"
-                      name="موتري"
-                      url="https://ksa.motory.com/ar/"
-                    />
-
-                    <ReferenceLink
-                      number="③"
-                      name="سيارة"
-                      url="https://syarah.com/"
-                    />
-
-                    <ReferenceLink
-                      number="④"
-                      name="هتلاقي"
-                      url="https://ksa.hatla2ee.com/ar/"
-                    />
-                  </div>
-                </div>
-
-                {/* SPECS */}
-                {(car.engine || car.power || car.fuel) && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginTop: 15,
-                    }}
-                  >
-                    {car.engine && (
-                      <SpecBadge text={car.engine} />
-                    )}
-
-                    {car.power && (
-                      <SpecBadge text={car.power} />
-                    )}
-
-                    {car.fuel && (
-                      <SpecBadge text={car.fuel} />
-                    )}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        {/* ================= REFERENCES ================= */}
+        <section className="card mt-8 p-5 sm:p-6">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Database size={18} className="text-brand-soft" aria-hidden />
+            المراجع
+          </h2>
+          <p className="mt-1 text-sm text-ink-3">
+            المصادر التي تُنسب إليها الأسعار ومقارنة السوق لهذه العلامة.
+          </p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <li>
+              <ReferenceLink number="①" name={brand.sourceName} url={brand.sourceUrl} primary />
+            </li>
+            {MARKET_REFERENCES.map((ref, i) => (
+              <li key={ref.url}>
+                <ReferenceLink number={["②", "③", "④"][i]} name={ref.name} url={ref.url} />
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </main>
   );
 }
 
-function MarketBox({
-  title,
-  value,
-}: {
-  title: string;
-  value: number | null;
-}) {
+/* =========================================================
+   بطاقة الموديل
+========================================================= */
+
+function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
+  const fair = getFairPrice(car);
+
   return (
-    <div
-      style={{
-        background: "#111F2C",
-        border: "1px solid #26394B",
-        borderRadius: 12,
-        padding: "11px 12px",
-      }}
-    >
-      <div
-        style={{
-          color: "#8191A4",
-          fontSize: 11,
-          marginBottom: 5,
-        }}
-      >
-        {title}
+    <article className="card flex h-full flex-col">
+      <div className="flex items-start justify-between gap-3 p-4 pb-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-bold leading-snug" dir="ltr" style={{ textAlign: "right" }}>
+            {car.name}
+          </h2>
+          <div className="num mt-0.5 text-xs text-ink-3">
+            {car.year}
+            {car.trim ? ` • ${car.trim}` : ""}
+          </div>
+        </div>
+        <Badge>جديد</Badge>
       </div>
 
-      <div
-        style={{
-          color: "#E8EEF5",
-          fontSize: 15,
-          fontWeight: 900,
-        }}
-      >
-        {value !== null
-          ? `${formatPrice(value)} ريال`
-          : "غير متاح"}
+      <div className="flex items-end justify-between gap-3 px-4">
+        <div>
+          <div className="text-xs text-ink-3">السعر المرجعي</div>
+          <div className="mt-0.5 text-2xl font-bold leading-tight">
+            {typeof car.price === "number" ? (
+              <Price value={car.price} />
+            ) : (
+              <span className="text-base font-medium text-ink-3">السعر غير متوفر</span>
+            )}
+          </div>
+        </div>
+        <FairPill fair={fair} />
       </div>
+
+      <div className="mt-1 px-4 text-[0.7rem] text-ink-3">المصدر المذكور: {sourceName}</div>
+
+      {(car.engine || car.power || car.fuel) && (
+        <div className="mt-3 flex flex-wrap gap-1.5 px-4">
+          {car.engine && <Badge>{car.engine}</Badge>}
+          {car.power && <Badge>{car.power}</Badge>}
+          {car.fuel && <Badge>{car.fuel}</Badge>}
+        </div>
+      )}
+
+      <details className="group mt-auto border-t border-line [&:not([open])]:mt-4">
+        <summary className="flex min-h-11 items-center justify-between gap-2 px-4 text-sm font-medium text-ink-2 transition-colors hover:text-ink">
+          <span className="inline-flex items-center gap-1.5">
+            <Scale size={15} aria-hidden />
+            مقارنة السوق والسعر العادل
+          </span>
+          <ChevronDown size={16} className="transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+
+        <div className="space-y-3 px-4 pb-4">
+          {fair.marketCount > 0 ? (
+            <>
+              <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                {fair.sources.map((source, index) => (
+                  <li key={`${source.source}-${source.price}-${index}`}>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex min-h-11 items-center justify-between gap-3 bg-surface-2 px-3 text-sm transition-colors hover:bg-surface-3"
+                    >
+                      <span className="inline-flex items-center gap-1.5 text-ink-2">
+                        {MARKET_SOURCE_NAMES[source.source] ?? source.source}
+                        <ExternalLink size={12} className="text-ink-3" aria-hidden />
+                      </span>
+                      <Price value={source.price} className="font-semibold" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+
+              <dl className="grid grid-cols-3 gap-2 text-center">
+                <MarketStat title="أقل سعر" value={fair.marketLow} />
+                <MarketStat title="متوسط السوق" value={fair.marketAverage} />
+                <MarketStat title="أعلى سعر" value={fair.marketHigh} />
+              </dl>
+            </>
+          ) : (
+            <p className="text-sm leading-7 text-ink-3">
+              لا توجد بيانات سوقية موثقة كافية لهذا الموديل حاليًا لحساب المقارنة.
+            </p>
+          )}
+
+          <FairDetails fair={fair} />
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function FairPill({ fair }: { fair: FairPriceResult }) {
+  if (fair.fairPrice !== null) {
+    return (
+      <div className="shrink-0 rounded-lg border border-brand/25 bg-brand/10 px-2.5 py-1.5 text-left">
+        <div className="text-[0.65rem] text-brand-soft/80">السعر العادل</div>
+        <Price value={fair.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/70 text-[0.7em]" />
+      </div>
+    );
+  }
+
+  if (fair.status === "not-independent") {
+    return <Badge tone="warn">مصادر قيد المراجعة</Badge>;
+  }
+
+  return <Badge>لا يوجد سعر عادل</Badge>;
+}
+
+function FairDetails({ fair }: { fair: FairPriceResult }) {
+  return (
+    <div
+      className={`rounded-lg border p-3 text-sm ${
+        fair.fairPrice !== null ? "border-brand/25 bg-brand/[0.06]" : "border-line bg-surface-2"
+      }`}
+    >
+      <div className="flex items-center gap-1.5 font-semibold">
+        <Scale size={15} aria-hidden /> السعر العادل
+      </div>
+
+      {fair.fairPrice !== null ? (
+        <>
+          <div className="mt-1 text-xl font-bold text-brand-soft">
+            <Price value={fair.fairPrice} unitClassName="text-brand-soft/70 text-[0.7em]" />
+          </div>
+          <div className="mt-1 font-medium">
+            {getFairPriceIcon(fair.status)} {getFairPriceLabel(fair.status)}
+          </div>
+          {fair.differencePercent !== null && (
+            <div className="num mt-1 text-ink-2">
+              الفرق عن السعر العادل: {Math.abs(fair.differencePercent).toFixed(1)}%
+              {fair.difference !== null &&
+                (fair.difference > 0 ? " أعلى" : fair.difference < 0 ? " أقل" : " مطابق")}
+            </div>
+          )}
+          <p className="mt-2 text-xs leading-6 text-ink-3">
+            تقدير أولي (الوسيط) من بيانات منشورة في {fair.sourceCount} مصادر، لم يتم
+            التحقق منها بعد.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="mt-1 text-ink-2">لا نعرض رقمًا تقديريًا للسعر العادل.</p>
+          {fair.status === "not-independent" && (
+            <p className="mt-1 text-xs leading-6 text-warn">
+              {getFairPriceIcon(fair.status)} السعر متطابق حرفيًا في جميع المصادر، لذلك لا
+              يمكن التأكد من أنها مصادر مستقلة. السعر العادل مخفي حتى تتم مراجعتها.
+            </p>
+          )}
+          <p className="mt-1 text-xs leading-6 text-ink-3">
+            يظهر السعر العادل فقط بعد توفر بيانات سوقية كافية من 3 مصادر مستقلة على الأقل.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MarketStat({ title, value }: { title: string; value: number | null }) {
+  return (
+    <div className="rounded-lg bg-surface-2 px-2 py-2">
+      <dt className="text-[0.7rem] text-ink-3">{title}</dt>
+      <dd className="mt-0.5 text-sm font-semibold">
+        {value !== null ? <Price value={value} /> : "غير متاح"}
+      </dd>
     </div>
   );
 }
@@ -828,53 +422,16 @@ function ReferenceLink({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        background: primary
-          ? "#0E2A22"
-          : "#101B26",
-        border: primary
-          ? "1px solid #17634D"
-          : "1px solid #263747",
-        borderRadius: 11,
-        padding: "10px 11px",
-        textDecoration: "none",
-        color: primary
-          ? "#6EE7B7"
-          : "#B5C1CE",
-        fontSize: 12,
-        fontWeight: 700,
-      }}
+      className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
+        primary
+          ? "border-brand/30 bg-brand/10 text-brand-soft hover:bg-brand/15"
+          : "border-line bg-surface-2 text-ink-2 hover:border-line-strong hover:text-ink"
+      }`}
     >
-      <span>
+      <span className="truncate">
         {number} {name}
       </span>
-
-      <ExternalLink size={13} />
+      <ExternalLink size={14} className="shrink-0" aria-hidden />
     </a>
-  );
-}
-
-function SpecBadge({
-  text,
-}: {
-  text: string;
-}) {
-  return (
-    <span
-      style={{
-        background: "#172536",
-        border: "1px solid #27394C",
-        borderRadius: 9,
-        padding: "8px 11px",
-        fontSize: 12,
-        color: "#B7C5D3",
-      }}
-    >
-      {text}
-    </span>
   );
 }
