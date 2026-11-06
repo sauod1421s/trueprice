@@ -27,10 +27,27 @@ export default function SearchClient({
   function submit() {
     const value = input.trim();
     setQuery(value);
+    // البحث يشمل جميع الفئات دائمًا
+    setCategory("all");
     router.replace(
       value ? `/search?q=${encodeURIComponent(value)}` : "/search",
       { scroll: false }
     );
+  }
+
+  /*
+   * أزرار الفئات تعرض كل منتجات الفئة المختارة.
+   * سابقًا كانت تُصفّي داخل نتائج البحث الحالية فقط، فإذا جاء المستخدم من
+   * الرئيسية بكلمة مثل "iPhone 17" تظهر الفئات الأخرى فارغة ويظهر الآيفون فقط.
+   * نمسح كلمة البحث هنا، ونحدّث الرابط دون إعادة تحميل الصفحة.
+   */
+  function selectCategory(cat: string) {
+    setCategory(cat);
+    if (query || input) {
+      setQuery("");
+      setInput("");
+      window.history.replaceState(null, "", "/search");
+    }
   }
 
   const results = useMemo(() => {
@@ -93,7 +110,7 @@ export default function SearchClient({
               <button
                 type="button"
                 aria-pressed={category === "all"}
-                onClick={() => setCategory("all")}
+                onClick={() => selectCategory("all")}
                 className={chip(category === "all")}
               >
                 الكل
@@ -103,7 +120,7 @@ export default function SearchClient({
                   key={cat}
                   type="button"
                   aria-pressed={category === cat}
-                  onClick={() => setCategory(cat)}
+                  onClick={() => selectCategory(cat)}
                   className={chip(category === cat)}
                 >
                   {catAr}
