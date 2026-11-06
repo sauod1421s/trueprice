@@ -2,8 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
+      "phase-*": false,
       "phase-1-affiliate-connectors": false,
-      "phase-1-ingest-hardening": false
+      "phase-1-ingest-hardening": false,
+      "phase-1-nextjs-upgrade": false,
+      "phase-1-release-candidate": false
     }
   }
 }
