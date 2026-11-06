@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, SearchX } from "lucide-react";
+import { Search } from "lucide-react";
+import { Boxes3D, Magnifier3D } from "../components/illustrations";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import ProductCard from "../components/ProductCard";
@@ -41,14 +42,21 @@ export default function SearchClient({
   const chip = (active: boolean) =>
     `inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm transition-colors ${
       active
-        ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
-        : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
+        ? "border-mint bg-mint font-semibold text-forest"
+        : "border-white/15 bg-white/[0.06] text-ink-2 hover:border-white/30 hover:text-ink"
     }`;
 
   return (
     <main>
-      <section className="border-b border-line bg-surface/30">
-        <div className="container-page py-8 sm:py-10">
+      <section className="theme-forest bg-hero relative overflow-hidden">
+        <div className="bg-dots pointer-events-none absolute inset-0 opacity-70" aria-hidden />
+        <div className="pointer-events-none absolute left-6 top-6 hidden w-28 md:block lg:left-16" aria-hidden>
+          <Magnifier3D className="float w-full" />
+        </div>
+        <div className="pointer-events-none absolute left-40 top-14 hidden w-20 lg:left-52 lg:block" aria-hidden>
+          <Boxes3D className="float-slow w-full" />
+        </div>
+        <div className="container-page relative py-8 sm:py-12">
           <h1 className="text-2xl font-bold sm:text-3xl">البحث في TruePrice</h1>
           <p className="mt-1 text-ink-2">ابحث عن أي جهاز أو شركة أو فئة</p>
 
@@ -58,9 +66,11 @@ export default function SearchClient({
               e.preventDefault();
               submit();
             }}
-            className="mt-5 flex items-center gap-2 rounded-2xl border border-line-strong bg-surface p-1.5 transition-colors focus-within:border-brand/60"
+            className="theme-light mt-5 flex max-w-3xl items-center gap-2 rounded-2xl border border-white/40 bg-surface p-1.5 shadow-[0_24px_50px_-18px_rgb(0_0_0/0.55)] transition-shadow focus-within:shadow-[0_0_0_4px_rgb(61_220_151/0.45),0_24px_50px_-18px_rgb(0_0_0/0.55)]"
           >
-            <Search size={19} className="ms-2.5 shrink-0 text-ink-3" aria-hidden />
+            <span className="ms-1 grid size-10 shrink-0 place-items-center rounded-xl bg-mint-50 text-brand-soft" aria-hidden>
+              <Search size={19} />
+            </span>
             <input
               type="search"
               value={input}
@@ -72,7 +82,7 @@ export default function SearchClient({
             />
             <button
               type="submit"
-              className="h-11 shrink-0 rounded-xl bg-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-strong sm:px-7"
+              className="h-11 shrink-0 rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong sm:px-7"
             >
               بحث
             </button>
@@ -124,8 +134,11 @@ export default function SearchClient({
         </TrustNote>
 
         {results.length === 0 ? (
-          <div className="card flex flex-col items-center px-6 py-12 text-center">
-            <SearchX size={36} className="text-ink-3" aria-hidden />
+          <div className="card bg-cream-wash flex flex-col items-center px-6 py-10 text-center">
+            <div className="relative h-28 w-40" aria-hidden>
+              <Boxes3D className="absolute bottom-0 left-0 w-24 opacity-90" />
+              <Magnifier3D className="absolute right-0 top-0 w-24" />
+            </div>
             <p className="mt-3 font-medium">لا توجد منتجات مطابقة للبحث.</p>
             <p className="mt-1 text-sm text-ink-3">
               جرّب كلمات أقل أو اسم الشركة فقط (مثال: «سامسونج» أو «iPhone»).

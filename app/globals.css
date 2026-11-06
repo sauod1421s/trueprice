@@ -10,30 +10,68 @@
     -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-bg: #070b12;
-  --color-surface: #0c131d;
-  --color-surface-2: #111a26;
-  --color-surface-3: #16212f;
-  --color-line: #1b2635;
-  --color-line-strong: #273447;
+  /*
+   * TruePrice — Fresh Modern
+   * الأساسي: Deep Forest (التفاعل والأقسام الداكنة)
+   * المساعد: Mint (الإبراز والحياة) + Soft Cream (الخلفيات)
+   * التفاصيل: Soft Yellow (لمسات صغيرة) + Coral (حيوية بجرعات قليلة)
+   */
+  --color-forest: #0c2e23;
+  --color-forest-2: #123a2d;
+  --color-mint: #3ddc97;
+  --color-mint-soft: #a7f3d0;
+  --color-mint-50: #ecfbf3;
+  --color-cream: #fff3dc;
+  --color-yellow: #ffd66b;
+  --color-yellow-50: #fff7d9;
+  --color-coral: #ff7a59;
+  --color-coral-50: #ffeee8;
+  --color-coral-ink: #c2482b;
 
-  --color-ink: #f1f5f9;
-  --color-ink-2: #aab6c5;
-  --color-ink-3: #74839a;
+  /* ===== الأسطح (فاتح دافئ) ===== */
+  --color-bg: #fbf7ef;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8f4ea;
+  --color-surface-3: #eef8f2;
+  --color-line: #ece4d4;
+  --color-line-strong: #dccfb6;
 
-  --color-brand: #10b981;
-  --color-brand-strong: #059669;
-  --color-brand-soft: #6ee7b7;
+  /* ===== النصوص ===== */
+  --color-ink: #12261e;
+  --color-ink-2: #455a51;
+  --color-ink-3: #5c6e66;
 
-  --color-warn: #f2b84b;
-  --color-warn-bg: #1b1508;
-  --color-warn-line: #3d3010;
+  /* ===== التفاعل ===== */
+  --color-brand: #0f4a37;
+  --color-brand-strong: #0b3528;
+  --color-brand-soft: #0d6e4c;
+  --color-on-brand: #ffffff;
+  --color-accent: #0d6e4c;
 
-  --color-bad: #f87171;
+  /* ===== الحالات ===== */
+  --color-good: #0b7a4f;
+  --color-good-soft: #0b7a4f;
+  --color-warn: #7a5200;
+  --color-warn-bg: #fff6d8;
+  --color-warn-line: #f3dd9a;
+  --color-bad: #c2362b;
 
-  --radius-card: 1rem;
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset,
-    0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(18 38 30 / 0.05),
+    0 12px 28px -16px rgb(18 38 30 / 0.2);
+
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out -3s infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-7px);
+    }
+  }
 
   --animate-fade-up: fade-up 0.45s ease-out both;
 
@@ -53,7 +91,7 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -66,8 +104,8 @@
   }
 
   ::selection {
-    background: rgb(16 185 129 / 0.3);
-    color: #fff;
+    background: rgb(61 220 151 / 0.35);
+    color: inherit;
   }
 
   :focus-visible {
@@ -109,6 +147,127 @@
 }
 
 @layer components {
+  /* ===== أقسام داكنة (Deep Forest): نفس الكلاسات بألوان معكوسة ===== */
+  .theme-forest {
+    --color-bg: #0c2e23;
+    --color-surface: #123a2d;
+    --color-surface-2: #164535;
+    --color-surface-3: #1b5040;
+    --color-line: #235a46;
+    --color-line-strong: #2f6d55;
+    --color-ink: #f6fbf8;
+    --color-ink-2: #cfe3d8;
+    --color-ink-3: #9cb9ab;
+    --color-brand: #3ddc97;
+    --color-brand-strong: #6ee7b7;
+    --color-brand-soft: #6ee7b7;
+    --color-on-brand: #0b2a21;
+    --color-accent: #ffd66b;
+    --color-good: #6ee7b7;
+    --color-good-soft: #a7f3d0;
+    --color-warn: #ffd66b;
+    --color-warn-bg: #2e2a12;
+    --color-warn-line: #5a4c1a;
+    --shadow-card: 0 14px 34px -16px rgb(0 0 0 / 0.5);
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    color-scheme: dark;
+  }
+
+  /* عنصر فاتح داخل قسم داكن (مثل مربع البحث) */
+  .theme-light {
+    --color-surface: #ffffff;
+    --color-surface-2: #f8f4ea;
+    --color-line: #ece4d4;
+    --color-line-strong: #dccfb6;
+    --color-ink: #12261e;
+    --color-ink-2: #455a51;
+    --color-ink-3: #5c6e66;
+    --color-brand: #0f4a37;
+    --color-brand-strong: #0b3528;
+    --color-brand-soft: #0d6e4c;
+    --color-on-brand: #ffffff;
+    --color-surface-3: #eef8f2;
+    --color-accent: #0d6e4c;
+    --color-good: #0b7a4f;
+    --color-good-soft: #0b7a4f;
+    --color-warn: #7a5200;
+    --color-warn-bg: #fff6d8;
+    --color-warn-line: #f3dd9a;
+    --shadow-card: 0 1px 2px rgb(18 38 30 / 0.05), 0 12px 28px -16px rgb(18 38 30 / 0.2);
+    color: var(--color-ink);
+    color-scheme: light;
+  }
+
+  /* خلفية الواجهة الداكنة: تدرج غابي + توهج نعناعي وأصفر */
+  .bg-hero {
+    background:
+      radial-gradient(40rem 26rem at 15% 10%, rgb(61 220 151 / 0.22), transparent 65%),
+      radial-gradient(28rem 20rem at 95% 95%, rgb(255 214 107 / 0.14), transparent 70%),
+      radial-gradient(22rem 16rem at 80% 0%, rgb(255 122 89 / 0.1), transparent 70%),
+      linear-gradient(160deg, #0f3a2c 0%, #0c2e23 55%, #0a271e 100%);
+  }
+
+  /* نقاط هندسية خفيفة */
+  .bg-dots {
+    background-image: radial-gradient(rgb(255 255 255 / 0.09) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+  }
+
+  .bg-dots-dark {
+    background-image: radial-gradient(rgb(15 74 55 / 0.09) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+  }
+
+  /* أقسام فاتحة ملونة بنعومة */
+  .bg-mint-wash {
+    background:
+      radial-gradient(30rem 16rem at 90% 0%, rgb(61 220 151 / 0.16), transparent 70%),
+      linear-gradient(180deg, #eefaf3, #fbf7ef);
+  }
+
+  .bg-cream-wash {
+    background:
+      radial-gradient(26rem 14rem at 5% 100%, rgb(255 214 107 / 0.22), transparent 70%),
+      linear-gradient(180deg, #fff6e6, #fbf7ef);
+  }
+
+  .text-gradient {
+    background: linear-gradient(90deg, #ffd66b 0%, #6ee7b7 55%, #3ddc97 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* حركة عائمة خفيفة على الشاشات الكبيرة فقط */
+  .float {
+    animation: none;
+  }
+
+  @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+    .float {
+      animation: var(--animate-float);
+    }
+
+    .float-slow {
+      animation: var(--animate-float-slow);
+    }
+  }
+
+  /* هيكل التحميل */
+  .skeleton {
+    background: linear-gradient(90deg, #f1ebdd 0%, #f8f4ea 40%, #f1ebdd 80%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: 0.6rem;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
   .container-page {
     width: 100%;
     max-width: 72rem;
@@ -137,13 +296,15 @@
   }
 
   .card-hover:hover {
-    border-color: rgb(16 185 129 / 0.4);
-    background-color: var(--color-surface-2);
+    border-color: rgb(61 220 151 / 0.7);
+    box-shadow:
+      0 1px 2px rgb(18 38 30 / 0.05),
+      0 18px 36px -18px rgb(15 74 55 / 0.35);
   }
 
   @media (hover: hover) {
     .card-hover:hover {
-      transform: translateY(-2px);
+      transform: translateY(-3px);
     }
   }
 
