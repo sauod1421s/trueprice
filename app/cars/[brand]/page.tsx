@@ -108,7 +108,7 @@ export default async function Page({
   return (
     <main>
       {/* ================= BRAND SWITCHER ================= */}
-      <nav aria-label="العلامات التجارية" className="border-b border-line bg-surface/40">
+      <nav aria-label="العلامات التجارية" className="border-b border-line bg-surface">
         <div className="container-page">
           <div className="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0">
             <ul className="flex gap-1.5 py-2.5">
@@ -129,7 +129,7 @@ export default async function Page({
                       aria-current={active ? "page" : undefined}
                       className={`inline-flex h-9 items-center rounded-full border px-3 text-sm transition-colors ${
                         active
-                          ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
+                          ? "border-brand bg-brand font-semibold text-white"
                           : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
                       }`}
                     >
@@ -160,7 +160,7 @@ export default async function Page({
         </ol>
 
         {/* ================= HERO ================= */}
-        <section className="card flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <section className="card theme-navy flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
           <div className="flex min-w-0 items-center gap-4">
             <BrandMonogram label={brandInitial(brand.name)} className="size-14 rounded-xl text-lg" />
             <div className="min-w-0">
@@ -211,7 +211,7 @@ export default async function Page({
         {/* ================= REFERENCES ================= */}
         <section className="card mt-8 p-5 sm:p-6">
           <h2 className="flex items-center gap-2 font-semibold">
-            <Database size={18} className="text-brand-soft" aria-hidden />
+            <Database size={18} className="text-brand" aria-hidden />
             المراجع
           </h2>
           <p className="mt-1 text-sm text-ink-3">
@@ -332,9 +332,9 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
 function FairPill({ fair }: { fair: FairPriceResult }) {
   if (fair.fairPrice !== null) {
     return (
-      <div className="shrink-0 rounded-lg border border-brand/25 bg-brand/10 px-2.5 py-1.5 text-left">
-        <div className="text-[0.65rem] text-brand-soft/80">السعر العادل</div>
-        <Price value={fair.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/70 text-[0.7em]" />
+      <div className="shrink-0 rounded-lg border border-accent/25 bg-accent/[0.07] px-2.5 py-1.5 text-left">
+        <div className="text-[0.65rem] text-accent">السعر العادل</div>
+        <Price value={fair.fairPrice} className="text-sm font-bold text-accent" unitClassName="text-accent/80 text-[0.7em]" />
       </div>
     );
   }
@@ -350,7 +350,7 @@ function FairDetails({ fair }: { fair: FairPriceResult }) {
   return (
     <div
       className={`rounded-lg border p-3 text-sm ${
-        fair.fairPrice !== null ? "border-brand/25 bg-brand/[0.06]" : "border-line bg-surface-2"
+        fair.fairPrice !== null ? "border-accent/25 bg-accent/[0.05]" : "border-line bg-surface-2"
       }`}
     >
       <div className="flex items-center gap-1.5 font-semibold">
@@ -359,8 +359,8 @@ function FairDetails({ fair }: { fair: FairPriceResult }) {
 
       {fair.fairPrice !== null ? (
         <>
-          <div className="mt-1 text-xl font-bold text-brand-soft">
-            <Price value={fair.fairPrice} unitClassName="text-brand-soft/70 text-[0.7em]" />
+          <div className="mt-1 text-xl font-bold text-accent">
+            <Price value={fair.fairPrice} unitClassName="text-accent/80 text-[0.7em]" />
           </div>
           <div className="mt-1 font-medium">
             {getFairPriceIcon(fair.status)} {getFairPriceLabel(fair.status)}
@@ -424,7 +424,7 @@ function ReferenceLink({
       rel="noopener noreferrer"
       className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
         primary
-          ? "border-brand/30 bg-brand/10 text-brand-soft hover:bg-brand/15"
+          ? "border-brand/30 bg-brand/[0.06] text-brand-soft hover:bg-brand/10"
           : "border-line bg-surface-2 text-ink-2 hover:border-line-strong hover:text-ink"
       }`}
     >

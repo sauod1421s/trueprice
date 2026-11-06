@@ -252,7 +252,7 @@ export default async function ProductPage({ params }: PageProps) {
                       key={`${offer.store}-${index}`}
                       className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border p-3 sm:p-4 ${
                         rank === 0
-                          ? "border-brand/30 bg-brand/[0.05]"
+                          ? "border-good/30 bg-good/[0.04]"
                           : "border-line bg-surface-2"
                       }`}
                     >
@@ -262,7 +262,7 @@ export default async function ProductPage({ params }: PageProps) {
                             {offer.storeAr || offer.store}
                           </span>
                           {rank === 0 && offer.price !== null && (
-                            <Badge tone="brand">الأقل سعرًا</Badge>
+                            <Badge tone="good">الأقل سعرًا</Badge>
                           )}
                         </div>
                         <div className="mt-0.5 text-xs text-ink-3">
@@ -288,7 +288,11 @@ export default async function ProductPage({ params }: PageProps) {
                           href={offer.url}
                           target="_blank"
                           rel="noopener noreferrer sponsored"
-                          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-surface-3 px-4 text-sm font-semibold text-ink transition-colors hover:bg-brand hover:text-white sm:w-auto"
+                          className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold transition-colors sm:w-auto ${
+                            rank === 0
+                              ? "bg-brand text-white hover:bg-brand-strong"
+                              : "border border-brand/30 bg-surface text-brand-soft hover:bg-brand hover:text-white"
+                          }`}
                         >
                           الانتقال للمتجر
                           <ExternalLink size={14} aria-hidden />
@@ -388,7 +392,7 @@ export default async function ProductPage({ params }: PageProps) {
         <section className="card overflow-hidden">
           <div className="p-5">
             <div className="text-sm text-ink-3">أقل سعر مرجعي</div>
-            <div className="mt-1 text-3xl font-bold text-brand-soft">
+            <div className="mt-1 text-3xl font-bold text-ink">
               {product.price !== null ? (
                 <Price value={product.price} unitClassName="text-ink-3 text-[0.55em] font-medium" />
               ) : (
@@ -461,7 +465,7 @@ export default async function ProductPage({ params }: PageProps) {
                   ? `أقل سعر معروض أقل من السعر العادل بنسبة ${saving.percent.toFixed(1)}%`
                   : "أقل سعر معروض ليس أقل من السعر العادل"
               }
-              tone="brand"
+              tone="good"
               wide
             />
           )}
@@ -471,7 +475,7 @@ export default async function ProductPage({ params }: PageProps) {
             title="حالة البيانات"
             value={hasUnverified ? TRUST_TEXT.unverified : "موثقة"}
             note={hasUnverified ? TRUST_TEXT.manualEntry : undefined}
-            tone={hasUnverified ? "warn" : "brand"}
+            tone={hasUnverified ? "warn" : "good"}
           />
 
           <InfoBox
@@ -514,8 +518,8 @@ function verdictStyle(saving: Saving) {
     case "below-fair":
       return {
         label: "✅ أقل من السعر العادل",
-        text: "text-brand-soft",
-        box: "border-brand/30 bg-brand/[0.07]",
+        text: "text-good-soft",
+        box: "border-good/30 bg-good/[0.06]",
       };
     case "at-fair":
       return {
@@ -536,7 +540,7 @@ function OfferSaving({ saving }: { saving: Saving | null }) {
   if (!saving || saving.amount <= 0) return null;
 
   return (
-    <div className="text-xs font-semibold text-brand-soft">
+    <div className="text-xs font-semibold text-good-soft">
       توفير {Math.round(saving.amount).toLocaleString("en-US")} ريال عن السعر
       العادل
     </div>
@@ -576,12 +580,13 @@ function InfoBox({
   value: string;
   note?: string;
   icon?: React.ReactNode;
-  tone?: "neutral" | "brand" | "warn";
+  tone?: "neutral" | "brand" | "good" | "warn";
   wide?: boolean;
 }) {
   const valueColor = {
     neutral: "text-ink",
     brand: "text-brand-soft",
+    good: "text-good-soft",
     warn: "text-warn",
   }[tone];
 

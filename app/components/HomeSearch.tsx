@@ -23,7 +23,7 @@ export default function HomeSearch() {
           e.preventDefault();
           go(search);
         }}
-        className="flex items-center gap-2 rounded-2xl border border-line-strong bg-surface p-1.5 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.8)] transition-colors focus-within:border-brand/60"
+        className="theme-light flex items-center gap-2 rounded-2xl border border-white/10 bg-surface p-1.5 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.6)] transition-shadow focus-within:shadow-[0_0_0_4px_rgb(37_99_235/0.35)]"
       >
         <Search size={20} className="ms-3 shrink-0 text-ink-3" aria-hidden />
         <input

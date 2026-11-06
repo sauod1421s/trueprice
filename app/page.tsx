@@ -60,10 +60,10 @@ export default function Home() {
   return (
     <main id="home">
       {/* ================= HERO ================= */}
-      <section className="relative overflow-hidden border-b border-line">
+      <section className="theme-navy relative overflow-hidden">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_28rem_at_50%_-8rem,rgb(16_185_129/0.14),transparent_70%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(50rem_26rem_at_50%_-8rem,rgb(37_99_235/0.4),transparent_70%),radial-gradient(30rem_18rem_at_85%_110%,rgb(20_184_166/0.18),transparent_70%)]"
         />
         <div
           aria-hidden
@@ -71,14 +71,14 @@ export default function Home() {
         />
 
         <div className="container-page relative py-14 text-center sm:py-20">
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-xs font-medium text-brand-soft">
-            <span className="size-1.5 rounded-full bg-brand" aria-hidden />
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-xs font-medium text-ink-2">
+            <span className="size-1.5 rounded-full bg-teal" aria-hidden />
             منصة سعودية مستقلة لذكاء الأسعار
           </span>
 
           <h1 className="mx-auto mt-5 max-w-3xl text-[2.1rem] font-bold leading-[1.25] tracking-tight sm:text-5xl sm:leading-[1.2]">
             اعرف{" "}
-            <span className="bg-gradient-to-l from-brand-soft to-brand bg-clip-text text-transparent">
+            <span className="bg-gradient-to-l from-brand-soft to-accent bg-clip-text text-transparent">
               السعر الحقيقي
             </span>
             <br className="hidden sm:block" /> قبل أن تشتري
@@ -198,10 +198,10 @@ export default function Home() {
 
       {/* ================= ABOUT ================= */}
       <section id="about" className="container-page pb-14 pt-8 sm:pb-20 sm:pt-12">
-        <div className="card relative overflow-hidden p-6 sm:p-10">
+        <div className="card theme-navy relative overflow-hidden p-6 sm:p-10">
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-24 left-0 size-72 rounded-full bg-brand/10 blur-3xl"
+            className="pointer-events-none absolute -top-24 left-0 size-72 rounded-full bg-brand/30 blur-3xl"
           />
           <div className="relative max-w-2xl">
             <h2 className="text-xl font-bold sm:text-2xl">عن TruePrice</h2>
@@ -211,7 +211,7 @@ export default function Home() {
               بسيطة وواضحة.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
-              <span className="inline-flex items-center gap-1.5 text-brand-soft">
+              <span className="inline-flex items-center gap-1.5 text-accent">
                 <CheckCircle2 size={16} aria-hidden />
                 منصة مستقلة لمرجع الأسعار والمعلومات
               </span>

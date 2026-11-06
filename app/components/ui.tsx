@@ -76,10 +76,10 @@ export function ProductVisual({
 }) {
   return (
     <div
-      className={`relative grid place-items-center overflow-hidden rounded-xl border border-line bg-gradient-to-b from-surface-3 to-surface-2 text-brand-soft ${className}`}
+      className={`relative grid place-items-center overflow-hidden rounded-xl border border-brand/15 bg-gradient-to-b from-brand/[0.08] to-surface-2 text-brand-soft ${className}`}
       aria-hidden
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-brand/40 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-teal/50 to-transparent" />
       <CategoryIcon category={category} size={size} />
     </div>
   );
@@ -95,12 +95,13 @@ export function Badge({
   className = "",
 }: {
   children: ReactNode;
-  tone?: "neutral" | "brand" | "warn";
+  tone?: "neutral" | "brand" | "good" | "warn";
   className?: string;
 }) {
   const tones = {
     neutral: "border-line-strong bg-surface-2 text-ink-2",
-    brand: "border-brand/30 bg-brand/10 text-brand-soft",
+    brand: "border-brand/25 bg-brand/[0.08] text-brand-soft",
+    good: "border-good/30 bg-good/10 text-good-soft",
     warn: "border-warn-line bg-warn-bg text-warn",
   } as const;
 
@@ -125,12 +126,12 @@ export function TrustNote({
   return (
     <div
       role="note"
-      className={`flex gap-3 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-6 text-warn/90 ${className}`}
+      className={`flex gap-3 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-6 text-warn ${className}`}
     >
       <TriangleAlert size={18} className="mt-0.5 shrink-0 text-warn" aria-hidden />
       <div>
         {title && <p className="font-semibold text-warn">{title}</p>}
-        {children && <div className="text-warn/80">{children}</div>}
+        {children && <div className="text-warn/90">{children}</div>}
       </div>
     </div>
   );
@@ -187,7 +188,7 @@ export function BrandMonogram({
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center rounded-lg border border-brand/20 bg-brand/10 font-bold text-brand-soft ${
+      className={`grid shrink-0 place-items-center rounded-lg border border-brand/20 bg-brand/[0.08] font-bold text-brand-soft ${
         label.length > 1 ? "text-xs" : "text-base"
       } ${className}`}
     >

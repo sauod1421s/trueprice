@@ -10,30 +10,47 @@
     -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-bg: #070b12;
-  --color-surface: #0c131d;
-  --color-surface-2: #111a26;
-  --color-surface-3: #16212f;
-  --color-line: #1b2635;
-  --color-line-strong: #273447;
+  /* ===== هوية TruePrice ===== */
+  --color-navy: #101c35;
+  --color-navy-2: #172648;
+  --color-blue: #2563eb;
+  --color-teal: #14b8a6;
 
-  --color-ink: #f1f5f9;
-  --color-ink-2: #aab6c5;
-  --color-ink-3: #74839a;
+  /* ===== أسطح المحتوى (فاتح) ===== */
+  --color-bg: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8fafc;
+  --color-surface-3: #eef2f7;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
 
-  --color-brand: #10b981;
-  --color-brand-strong: #059669;
-  --color-brand-soft: #6ee7b7;
+  /* ===== النصوص ===== */
+  --color-ink: #0f172a;
+  --color-ink-2: #475569;
+  --color-ink-3: #5b6b80;
 
-  --color-warn: #f2b84b;
-  --color-warn-bg: #1b1508;
-  --color-warn-line: #3d3010;
+  /* ===== التفاعل (أزرق) ===== */
+  --color-brand: #2563eb;
+  --color-brand-strong: #1d4ed8;
+  --color-brand-soft: #1d4ed8;
 
-  --color-bad: #f87171;
+  /* ===== لمسة الهوية (فيروزي) ===== */
+  --color-accent: #0f766e;
+
+  /* ===== الأخضر للتوفير والنتائج الإيجابية فقط ===== */
+  --color-good: #16a34a;
+  --color-good-soft: #15803d;
+
+  /* ===== تنبيهات ===== */
+  --color-warn: #92400e;
+  --color-warn-bg: #fffbeb;
+  --color-warn-line: #fde68a;
+
+  --color-bad: #dc2626;
 
   --radius-card: 1rem;
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset,
-    0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04),
+    0 6px 20px -10px rgb(15 23 42 / 0.12);
 
   --animate-fade-up: fade-up 0.45s ease-out both;
 
@@ -53,7 +70,7 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -66,8 +83,8 @@
   }
 
   ::selection {
-    background: rgb(16 185 129 / 0.3);
-    color: #fff;
+    background: rgb(37 99 235 / 0.2);
+    color: inherit;
   }
 
   :focus-visible {
@@ -109,6 +126,46 @@
 }
 
 @layer components {
+  /*
+   * الأقسام الكحلية (الهيدر، الواجهة، الفوتر...): نفس الأدوات
+   * لكن بألوان معكوسة، فلا حاجة لتغيير الكلاسات داخلها.
+   */
+  .theme-light {
+    --color-surface: #ffffff;
+    --color-surface-2: #f8fafc;
+    --color-line: #e2e8f0;
+    --color-line-strong: #cbd5e1;
+    --color-ink: #0f172a;
+    --color-ink-2: #475569;
+    --color-ink-3: #5b6b80;
+    --color-brand-soft: #1d4ed8;
+    color: var(--color-ink);
+    color-scheme: light;
+  }
+
+  .theme-navy {
+    --color-bg: #101c35;
+    --color-surface: #172648;
+    --color-surface-2: #1b2d55;
+    --color-surface-3: #22365f;
+    --color-line: #26395f;
+    --color-line-strong: #34497a;
+    --color-ink: #ffffff;
+    --color-ink-2: #cbd5e1;
+    --color-ink-3: #94a3b8;
+    --color-brand-soft: #93c5fd;
+    --color-accent: #5eead4;
+    --color-good: #4ade80;
+    --color-good-soft: #86efac;
+    --color-warn: #fcd34d;
+    --color-warn-bg: #2a2410;
+    --color-warn-line: #5c4a14;
+    --shadow-card: 0 10px 30px -12px rgb(0 0 0 / 0.45);
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    color-scheme: dark;
+  }
+
   .container-page {
     width: 100%;
     max-width: 72rem;
@@ -137,8 +194,10 @@
   }
 
   .card-hover:hover {
-    border-color: rgb(16 185 129 / 0.4);
-    background-color: var(--color-surface-2);
+    border-color: rgb(37 99 235 / 0.45);
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 0.04),
+      0 14px 30px -14px rgb(37 99 235 / 0.3);
   }
 
   @media (hover: hover) {
@@ -153,7 +212,7 @@
     gap: 0.4rem;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--color-brand-soft);
+    color: var(--color-accent);
   }
 
   .scroll-x {

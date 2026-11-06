@@ -40,7 +40,7 @@ export default function ProductCard({ product }: { product: Product }) {
         )}
         {!HIDDEN_MEMORY.has(product.memory) && <Badge>الذاكرة {product.memory}</Badge>}
         {hasPrices && (
-          <Badge tone={verified ? "brand" : "warn"}>{verified ? "موثق" : "غير موثق"}</Badge>
+          <Badge tone={verified ? "good" : "warn"}>{verified ? "موثق" : "غير موثق"}</Badge>
         )}
       </div>
 
@@ -66,8 +66,8 @@ export default function ProductCard({ product }: { product: Product }) {
 
           {fair.fairPrice !== null && (
             <div className="mt-2 flex items-center justify-between border-t border-line pt-2 text-sm">
-              <span className="text-brand-soft">السعر العادل</span>
-              <Price value={fair.fairPrice} className="font-semibold text-brand-soft" />
+              <span className="text-accent">السعر العادل</span>
+              <Price value={fair.fairPrice} className="font-semibold text-accent" />
             </div>
           )}
         </div>
@@ -114,7 +114,7 @@ export default function ProductCard({ product }: { product: Product }) {
       <div className="flex-1" />
       <Link
         href={`/product/${product.id}`}
-        className="mt-4 flex min-h-11 items-center justify-center gap-1 rounded-lg border border-line-strong text-sm font-medium text-ink transition-colors hover:border-brand/50 hover:text-brand-soft"
+        className="mt-4 flex min-h-11 items-center justify-center gap-1 rounded-lg border border-brand/30 text-sm font-semibold text-brand-soft transition-colors hover:bg-brand hover:text-white"
       >
         عرض التفاصيل والمقارنة
         <ChevronLeft size={16} aria-hidden />

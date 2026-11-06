@@ -22,7 +22,7 @@ const LINKS = [
 
 export default function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-line bg-surface/40">
+    <footer className="theme-navy mt-auto border-t border-line">
       <div className="container-page py-10 sm:py-12">
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-[2fr_1fr_1fr]">
           <div className="col-span-2 lg:col-span-1">

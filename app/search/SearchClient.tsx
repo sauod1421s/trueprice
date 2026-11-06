@@ -41,13 +41,13 @@ export default function SearchClient({
   const chip = (active: boolean) =>
     `inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm transition-colors ${
       active
-        ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
+        ? "border-brand bg-brand font-semibold text-white"
         : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
     }`;
 
   return (
     <main>
-      <section className="border-b border-line bg-surface/30">
+      <section className="theme-navy bg-[radial-gradient(40rem_16rem_at_50%_-6rem,rgb(37_99_235/0.3),transparent_70%)]">
         <div className="container-page py-8 sm:py-10">
           <h1 className="text-2xl font-bold sm:text-3xl">البحث في TruePrice</h1>
           <p className="mt-1 text-ink-2">ابحث عن أي جهاز أو شركة أو فئة</p>
@@ -58,7 +58,7 @@ export default function SearchClient({
               e.preventDefault();
               submit();
             }}
-            className="mt-5 flex items-center gap-2 rounded-2xl border border-line-strong bg-surface p-1.5 transition-colors focus-within:border-brand/60"
+            className="theme-light mt-5 flex items-center gap-2 rounded-2xl border border-white/10 bg-surface p-1.5 transition-shadow focus-within:shadow-[0_0_0_4px_rgb(37_99_235/0.35)]"
           >
             <Search size={19} className="ms-2.5 shrink-0 text-ink-3" aria-hidden />
             <input

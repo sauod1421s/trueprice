@@ -17,7 +17,7 @@ export default function CarsPage() {
 
   return (
     <main>
-      <section className="border-b border-line bg-[radial-gradient(50rem_20rem_at_50%_-6rem,rgb(16_185_129/0.12),transparent_70%)]">
+      <section className="theme-navy bg-[radial-gradient(50rem_22rem_at_50%_-8rem,rgb(37_99_235/0.35),transparent_70%)]">
         <div className="container-page py-10 sm:py-14">
           <div className="eyebrow mb-3">
             <Car size={14} aria-hidden /> قسم السيارات · المرحلة الأولى
@@ -52,7 +52,7 @@ export default function CarsPage() {
 
       <section className="container-page pb-14">
         <div className="card flex gap-3 p-5">
-          <Info size={19} className="mt-1 shrink-0 text-brand-soft" aria-hidden />
+          <Info size={19} className="mt-1 shrink-0 text-brand" aria-hidden />
           <div>
             <h2 className="font-semibold">ملاحظة حول الأسعار</h2>
             <p className="mt-1 text-sm leading-7 text-ink-2">
