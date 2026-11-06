@@ -194,7 +194,7 @@ export default function Home() {
       </section>
 
       {/* ================= CARS ================= */}
-      <section className="container-page py-10 sm:py-14">
+      <section className="container-page pb-10 pt-12 sm:pb-14 sm:pt-16">
         <div className="bg-cream-wash relative overflow-hidden rounded-[1.75rem] border border-[#f2dfb8] p-5 sm:p-8">
           <div className="bg-dots-dark pointer-events-none absolute inset-0 opacity-50" aria-hidden />
           <div className="pointer-events-none absolute -left-4 top-4 hidden w-56 md:block" aria-hidden>
@@ -207,7 +207,7 @@ export default function Home() {
           <div className="relative">
             <SectionHeading
               eyebrow="قسم السيارات"
-              title="مرجع أسعار السيارات"
+              title={<>مرجع أسعار <span className="text-gradient-ink">السيارات</span></>}
               description="تعرّف على أسعار السيارات الجديدة في السعودية وقارن الموديلات والفئات قبل التواصل مع الوكيل."
               action={
                 <Link
@@ -248,7 +248,7 @@ export default function Home() {
         <div className="container-page">
           <SectionHeading
             eyebrow="طريقة العمل"
-            title="كيف يعمل TruePrice؟"
+            title={<>كيف يعمل <span className="text-gradient-ink" dir="ltr">TruePrice</span>؟</>}
             description="أربع خطوات بسيطة لمعرفة السعر قبل الشراء"
           />
 
@@ -277,9 +277,18 @@ export default function Home() {
 
       {/* ================= EXAMPLES ================= */}
       <section className="container-page py-12 sm:py-16">
+        <div className="card relative overflow-hidden p-5 sm:p-8">
+          <div className="bg-dots-dark pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-2 left-6 hidden w-28 md:block" aria-hidden>
+            <Cart3D className="float-slow w-full" />
+          </div>
+          <div className="pointer-events-none absolute left-36 top-5 hidden w-14 md:block" aria-hidden>
+            <Coins3D className="float w-full" />
+          </div>
+          <div className="relative md:pl-48">
         <SectionHeading
           eyebrow="🔎 أمثلة للبحث"
-          title="ابدأ بأحد المنتجات الشائعة"
+          title={<>ابدأ بأحد <span className="text-gradient-ink">المنتجات الشائعة</span></>}
           action={
             <Link
               href="/search"
@@ -305,6 +314,8 @@ export default function Home() {
             </Link>
           ))}
         </div>
+          </div>
+        </div>
       </section>
 
       {/* ================= ABOUT ================= */}
@@ -319,7 +330,7 @@ export default function Home() {
           </div>
 
           <div className="relative max-w-2xl">
-            <h2 className="text-xl font-bold sm:text-2xl">عن TruePrice</h2>
+            <h2 className="text-[1.4rem] font-bold sm:text-[1.9rem]">عن <span className="text-gradient" dir="ltr">TruePrice</span></h2>
             <p className="mt-3 leading-8 text-ink-2">
               TruePrice منصة مستقلة تهدف إلى مساعدة المستهلك على فهم الأسعار
               ومقارنتها قبل الشراء، من خلال عرض بيانات الأسعار وتحليلها بطريقة

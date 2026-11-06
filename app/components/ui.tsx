@@ -170,7 +170,7 @@ export function SectionHeading({
           className={
             Tag === "h1"
               ? "text-2xl font-bold leading-tight sm:text-3xl"
-              : "text-xl font-bold leading-tight sm:text-2xl"
+              : "text-[1.4rem] font-bold leading-tight sm:text-[1.9rem]"
           }
         >
           {title}

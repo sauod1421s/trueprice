@@ -65,7 +65,7 @@ export default function MethodologyPage() {
           <div className="mt-2 flex items-center gap-3">
             <Scale3D className="size-16 shrink-0 md:hidden" />
             <h1 className="text-[1.9rem] font-bold leading-tight sm:text-4xl">
-              منهجية الأسعار في TruePrice
+              منهجية <span className="text-gradient">الأسعار</span> في TruePrice
             </h1>
           </div>
           <p className="mt-3 max-w-2xl leading-8 text-ink-2">

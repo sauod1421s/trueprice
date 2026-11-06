@@ -239,6 +239,14 @@
     color: transparent;
   }
 
+  /* تدرج للعناوين على الخلفيات الفاتحة (نص كبير فقط) */
+  .text-gradient-ink {
+    background: linear-gradient(90deg, #1f9e69 0%, #0f6b4c 45%, #0f4a37 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   /* حركة عائمة خفيفة على الشاشات الكبيرة فقط */
   .float {
     animation: none;
