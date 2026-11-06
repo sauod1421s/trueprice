@@ -6,6 +6,7 @@
  */
 
 import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { DEFAULT_LIMITS, ImportFatalError, type ImportLimits } from "./limits";
 import type { FeedFormat, RawRecord } from "./types";
 
 type XmlNode = string | number | boolean | XmlObject | XmlNode[];
@@ -17,16 +18,25 @@ export type XmlParseResult = {
   meta: { feedUpdatedAt: string | null; storeName: string | null };
 };
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  parseTagValue: false,
-  parseAttributeValue: false,
-  trimValues: true,
-  processEntities: true,
-  // منع توسيع الكيانات الخارجية (أمان)
-  allowBooleanAttributes: true,
-});
+function makeParser(limits: ImportLimits) {
+  return new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    parseTagValue: false,
+    parseAttributeValue: false,
+    trimValues: true,
+    allowBooleanAttributes: true,
+    maxNestedTags: limits.maxXmlDepth,
+    // الكيانات الخارجية مرفوضة من المكتبة؛ الداخلية بحدود صارمة
+    processEntities: {
+      enabled: true,
+      maxEntityCount: 50,
+      maxEntitySize: 1_000,
+      maxTotalExpansions: 1_000,
+      maxExpandedLength: 50_000,
+    },
+  });
+}
 
 function isObject(v: unknown): v is XmlObject {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -51,8 +61,8 @@ function textOf(v: XmlNode | undefined): string {
 }
 
 /** يسطّح عنصر منتج إلى مفتاح → نص (يحذف بادئة g: ويضم السمات) */
-function flatten(node: XmlObject): RawRecord {
-  const out: RawRecord = {};
+function flatten(node: XmlObject, limits: ImportLimits): RawRecord {
+  const out: RawRecord = Object.create(null);
   for (const [rawKey, value] of Object.entries(node)) {
     const key = rawKey.replace(/^@_/, "").replace(/^g:/, "");
     if (key === "#text") continue;
@@ -60,15 +70,20 @@ function flatten(node: XmlObject): RawRecord {
     const text = Array.isArray(value)
       ? value.map((v) => textOf(v)).find((t) => t !== "") ?? ""
       : textOf(value);
+    if (text.length > limits.maxFieldLength) {
+      throw new ImportFatalError("field_too_long", `قيمة العنصر "${key}" أطول من ${limits.maxFieldLength} حرف`);
+    }
     if (text !== "" && !(key in out)) out[key] = text;
   }
   return out;
 }
 
-function toRecords(items: XmlNode[]): { row: number; record: RawRecord }[] {
-  return items
-    .filter(isObject)
-    .map((item, i) => ({ row: i + 1, record: flatten(item) }));
+function toRecords(items: XmlNode[], limits: ImportLimits): { row: number; record: RawRecord }[] {
+  const objects = items.filter(isObject);
+  if (objects.length > limits.maxRows) {
+    throw new ImportFatalError("too_many_rows", `الملف يحتوي أكثر من ${limits.maxRows} منتج`);
+  }
+  return objects.map((item, i) => ({ row: i + 1, record: flatten(item, limits) }));
 }
 
 /** يبحث عن أكبر قائمة كائنات متكررة (للصيغة العامة) */
@@ -92,18 +107,18 @@ function largestObjectArray(node: XmlNode, depth = 0): XmlObject[] {
   return best;
 }
 
-export function parseXml(input: string): XmlParseResult {
+export function parseXml(input: string, limits: ImportLimits = DEFAULT_LIMITS): XmlParseResult {
   // التحقق أولًا: المكتبة متسامحة مع الملفات المقطوعة، ونحن لا نريد ذلك
   const valid = XMLValidator.validate(input);
   if (valid !== true) {
-    throw new Error(`ملف XML غير صالح (سطر ${valid.err.line}): ${valid.err.msg}`);
+    throw new ImportFatalError("invalid_xml", `ملف XML غير صالح (سطر ${valid.err.line}): ${valid.err.msg}`, valid.err.line);
   }
 
   let doc: XmlObject;
   try {
-    doc = parser.parse(input) as XmlObject;
+    doc = makeParser(limits).parse(input) as XmlObject;
   } catch (e) {
-    throw new Error(`ملف XML غير صالح: ${(e as Error).message}`);
+    throw new ImportFatalError("invalid_xml", `ملف XML غير صالح: ${(e as Error).message}`);
   }
 
   // Google Merchant — RSS
@@ -112,7 +127,7 @@ export function parseXml(input: string): XmlParseResult {
     const items = asArray(rss.channel.item as XmlNode | XmlNode[] | undefined);
     return {
       format: "google-merchant",
-      records: toRecords(items),
+      records: toRecords(items, limits),
       meta: {
         feedUpdatedAt: textOf(rss.channel.lastBuildDate) || textOf(rss.channel.pubDate) || null,
         storeName: textOf(rss.channel.title) || null,
@@ -125,7 +140,7 @@ export function parseXml(input: string): XmlParseResult {
   if (isObject(feed) && feed.entry !== undefined) {
     return {
       format: "google-merchant",
-      records: toRecords(asArray(feed.entry as XmlNode | XmlNode[])),
+      records: toRecords(asArray(feed.entry as XmlNode | XmlNode[]), limits),
       meta: {
         feedUpdatedAt: textOf(feed.updated) || null,
         storeName: textOf(feed.title) || null,
@@ -139,7 +154,7 @@ export function parseXml(input: string): XmlParseResult {
     const shop = yml.shop;
     const offers = isObject(shop.offers) ? asArray(shop.offers.offer as XmlNode | XmlNode[] | undefined) : [];
     const currencies = isObject(shop.currencies) ? asArray(shop.currencies.currency as XmlNode | XmlNode[] | undefined) : [];
-    const records = toRecords(offers).map(({ row, record }) => {
+    const records = toRecords(offers, limits).map(({ row, record }) => {
       // availability في YML سمة available="true|false"
       if (record.available !== undefined && record.availability === undefined) {
         record.availability = record.available === "true" ? "in_stock" : record.available === "false" ? "out_of_stock" : record.available;
@@ -165,7 +180,7 @@ export function parseXml(input: string): XmlParseResult {
   const items = largestObjectArray(doc);
   return {
     format: "xml",
-    records: toRecords(items),
+    records: toRecords(items, limits),
     meta: { feedUpdatedAt: null, storeName: null },
   };
 }

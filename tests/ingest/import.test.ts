@@ -1,140 +1,165 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { runImport } from "@/app/lib/ingest/importer";
-import type { CatalogEntry } from "@/app/lib/ingest/matching";
-import type { SourceConfig } from "@/app/lib/ingest/types";
+import { isValidSourceId, runImport } from "@/app/lib/ingest/importer";
+import { AT, csv, fixture, src, TEST_CATALOG, TEST_REGISTRY } from "./helpers";
 
-const fixture = (name: string) =>
-  readFileSync(path.join(__dirname, "../fixtures/feeds", name), "utf8");
+const run = (file: string, over = {}) =>
+  runImport({ source: src(over), fileName: file, content: fixture(file), catalog: TEST_CATALOG, importedAt: AT, registry: TEST_REGISTRY });
 
-/** كتالوج اختبار خيالي */
-const catalog: CatalogEntry[] = [
-  { id: 1, label: "Test Phone X 256GB", brand: "TestBrand", names: ["Test Phone X 256GB"], gtins: ["04006381333931"], mpns: ["TPX256BK"] },
-  { id: 2, label: "Test Phone X 512GB", brand: "TestBrand", names: ["Test Phone X 512GB"], gtins: [], mpns: [] },
-  { id: 3, label: "Test Tablet 11", brand: "TestBrand", names: ["Test Tablet 11"], gtins: [], mpns: [] },
-];
+const errors = (r: ReturnType<typeof run>) => r.rejected.map((x) => [x.row, x.issues.filter((i) => i.severity === "error").map((i) => i.code)]);
 
-const src = (over: Partial<SourceConfig> = {}): SourceConfig => ({
-  id: "test-source",
-  name: "Test source",
-  kind: "manual_upload",
-  ...over,
-});
+describe("Google Merchant RSS", () => {
+  const r = run("google-merchant.xml");
 
-const at = "2026-11-06T16:00:00.000Z";
-
-describe("استيراد Google Merchant", () => {
-  const r = runImport({ source: src(), fileName: "feed.xml", content: fixture("google-merchant.xml"), catalog, importedAt: at });
-
-  it("يكتشف الصيغة ويقبل الصالح ويرفض الصفري والعملة غير المدعومة", () => {
+  it("يكتشف الصيغة ويقبل الصالح ويرفض السعر الصفري", () => {
+    expect(r.fatal).toBe(null);
     expect(r.format).toBe("google-merchant");
     expect(r.totalRows).toBe(4);
-    expect(r.summary.accepted).toBe(2);
-    expect(r.rejected.map((x) => x.issues.filter((i) => i.severity === "error").map((i) => i.code))).toEqual([["non_positive_price"], ["unsupported_currency"]]);
+    expect(errors(r)).toEqual([[3, ["non_positive_price"]]]);
   });
 
-  it("يستخدم سعر التخفيض ويحفظ السعر الأصلي، ويأخذ المتجر من عنوان الملف", () => {
+  it("يستخدم سعر الخصم ويحفظ السعر قبل الخصم والعملة", () => {
     const o = r.accepted[0].offer;
-    expect(o).toMatchObject({ price: 1899, listPrice: 1999, currency: "SAR", store: "Test Store Alpha", availability: "in_stock", condition: "new" });
-    expect(o.sourceUpdatedAt).toBe("2026-11-05T09:00:00.000Z");
-  });
-
-  it("يفصل المجدد عن الجديد", () => {
-    expect(r.summary.refurbished).toBe(1);
-    expect(r.accepted[1].offer.condition).toBe("refurbished");
-  });
-
-  it("كل ملاحظة سعر تبدأ غير موثقة", () => {
-    expect(r.accepted.every((a) => a.observation.initialStatus === "unverified")).toBe(true);
-  });
-});
-
-describe("استيراد YML (صيغة شبكات العمولة)", () => {
-  const r = runImport({ source: src(), fileName: "feed.xml", content: fixture("yml.xml"), catalog, importedAt: at });
-
-  it("يقبل الصالح ويرفض السعر غير المقروء ويتجاهل الباركود الخاطئ مع تحذير", () => {
-    expect(r.format).toBe("yml");
-    expect(r.summary.accepted).toBe(2);
-    expect(r.rejected[0].issues[0].code).toBe("missing_price");
-    expect(r.warnings.some((w) => w.code === "invalid_gtin")).toBe(true);
-    expect(r.accepted[1].offer.gtin).toBeNull();
-  });
-
-  it("رابط تتبع الشبكة لا يُعتبر اسم متجر — يُستخدم اسم المتجر من الملف", () => {
-    expect(r.accepted[0].offer.store).toBe("Test Store Gamma");
-    expect(r.accepted[0].offer.storeKey).toBe("teststoregamma");
-  });
-
-  it("يطابق بالباركود", () => {
+    expect(o).toMatchObject({
+      price: { amount: 1899, currency: "SAR" },
+      listPrice: { amount: 1999, currency: "SAR" },
+      sarPrice: 1899,
+      sarListPrice: 1999,
+      fx: null,
+      storeId: "alpha",
+      condition: "new",
+    });
     expect(r.accepted[0].match).toMatchObject({ status: "matched", method: "gtin", productId: 1 });
   });
-});
 
-describe("استيراد CSV عربي", () => {
-  const r = runImport({ source: src(), fileName: "store.csv", content: fixture("store-ar.csv"), catalog, importedAt: at });
-
-  it("يقرأ الفاصلة المنقوطة والأرقام العربية ورمز ر.س", () => {
-    expect(r.accepted[0].offer).toMatchObject({ price: 1949, currency: "SAR", store: "متجر دلتا التجريبي", condition: "new" });
+  it("العملة الأجنبية تُحفظ كما هي بلا تحويل ولا تُحسب بالريال", () => {
+    const usd = r.accepted.find((a) => a.offer.price.currency === "USD")!.offer;
+    expect(usd).toMatchObject({ price: { amount: 499, currency: "USD" }, sarPrice: null, fx: null });
+    expect(r.summary.foreignCurrency).toBe(1);
+    expect(r.warnings.some((w) => w.code === "foreign_currency_unconverted")).toBe(true);
   });
 
-  it("يفصل المستعمل عن الجديد", () => {
-    expect(r.summary.new).toBe(1);
-    expect(r.summary.used).toBe(1);
-  });
-
-  it("يرفض: السعر المفقود، الرابط الخاطئ، العملة غير المعروفة، الحالة غير المفهومة", () => {
-    const codes = r.rejected.map((x) => x.issues.filter((i) => i.severity === "error").map((i) => i.code)[0]);
-    expect(codes).toEqual(["missing_price", "invalid_url", "unknown_currency", "unknown_condition"]);
-    expect(r.rejected.map((x) => x.row)).toEqual([4, 5, 6, 7]);
-  });
-
-  it("المستعمل بدون معرّفات يذهب للمراجعة ولا يُدمج تلقائيًا", () => {
-    const used = r.accepted.find((a) => a.offer.condition === "used")!;
-    expect(used.match.status).toBe("needs_review");
+  it("تاريخ الملف يُقرأ بتوقيت UTC", () => {
+    expect(r.feedGeneratedAt).toEqual({ utc: "2026-11-05T09:00:00.000Z", originalOffset: "Z", assumedTimeZone: null });
   });
 });
 
-describe("استيراد CSV من شبكة عمولة", () => {
-  it("يتجاهل الصف المكرر داخل الملف نفسه", () => {
-    const r = runImport({ source: src(), fileName: "net.csv", content: fixture("network.csv"), catalog, importedAt: at });
+describe("Atom وYML", () => {
+  it("Atom: يقرأ المستعمل منفصلًا", () => {
+    const r = run("google-merchant-atom.xml");
+    expect(r.format).toBe("google-merchant");
+    expect(r.summary).toMatchObject({ accepted: 1, used: 1 });
+  });
+
+  it("YML: price = السعر الحالي و oldprice = السعر قبل الخصم", () => {
+    const r = run("yml.xml");
+    expect(r.format).toBe("yml");
+    expect(r.accepted[0].offer).toMatchObject({ price: { amount: 2149 }, listPrice: { amount: 2299 }, storeId: "gamma" });
+    expect(errors(r)).toEqual([[3, ["unknown_currency"]]]);
+  });
+});
+
+describe("CSV عربي بفاصلة منقوطة", () => {
+  const r = run("store-ar.csv");
+  it("يقرأ الأرقام العربية والرموز المحلية ويحفظ المنطقة الأصلية", () => {
+    expect(r.accepted[0].offer).toMatchObject({
+      price: { amount: 1949, currency: "SAR" },
+      storeId: "delta",
+      sourceUpdatedAt: { utc: "2026-11-05T05:00:00.000Z", originalOffset: "+03:00", assumedTimeZone: null },
+    });
+    expect(r.accepted[1].offer.condition).toBe("used");
+  });
+  it("يرفض الصفوف الناقصة ويذكر السبب ورقم السطر", () => {
+    expect(errors(r)).toEqual([
+      [4, ["missing_price"]],
+      [5, ["invalid_url"]],
+      [6, ["unknown_currency"]],
+      [7, ["unknown_condition"]],
+    ]);
+  });
+});
+
+describe("CSV شبكة عمولة", () => {
+  it("التاريخ بلا منطقة يُتجاهل ما لم يحدد المصدر منطقته", () => {
+    const none = run("network.csv");
+    expect(none.accepted.every((a) => a.offer.sourceUpdatedAt === null)).toBe(true);
+    expect(none.warnings.some((w) => w.code === "date_no_timezone")).toBe(true);
+    const riyadh = run("network.csv", { timeZone: "Asia/Riyadh" });
+    expect(riyadh.accepted[0].offer.sourceUpdatedAt).toEqual({ utc: "2026-11-05T07:00:00.000Z", originalOffset: "+03:00", assumedTimeZone: "Asia/Riyadh" });
+    // نفس الملف بنفس الإعداد = نفس النتيجة على أي جهاز
+    expect(run("network.csv", { timeZone: "Asia/Riyadh" }).accepted.map((a) => a.offer.sourceUpdatedAt)).toEqual(riyadh.accepted.map((a) => a.offer.sourceUpdatedAt));
+  });
+
+  it("يكتشف التكرار داخل الملف ويستخرج الوجهة من رابط التتبع", () => {
+    const r = run("network.csv");
     expect(r.duplicatesInFile).toBe(1);
+    expect(r.accepted[0].offer.canonicalUrl).toBe("https://epsilon.example.com/");
+    expect(r.warnings.some((w) => w.code === "redirect_without_target")).toBe(true);
   });
 
-  it("رابط تتبع بدون اسم متجر = مرفوض (لا نخمّن المتجر)", () => {
-    const r = runImport({ source: src(), fileName: "net.csv", content: fixture("network.csv"), catalog, importedAt: at });
-    const rej = r.rejected.find((x) => x.record.id === "N-2")!;
-    expect(rej.issues.map((i) => i.code)).toContain("unknown_store");
-  });
-
-  it("اسم المتجر الافتراضي للمصدر يحل المشكلة عند تحديده صراحة", () => {
-    const r = runImport({ source: src({ defaultStore: "Test Store Epsilon" }), fileName: "net.csv", content: fixture("network.csv"), catalog, importedAt: at });
-    expect(r.rejected).toHaveLength(0);
-  });
-
-  it("إعادة استيراد نفس الملف تعطي نفس معرّفات الملاحظات", () => {
-    const a = runImport({ source: src(), fileName: "net.csv", content: fixture("network.csv"), catalog, importedAt: at });
-    const b = runImport({ source: src(), fileName: "net.csv", content: fixture("network.csv"), catalog, importedAt: "2026-11-07T00:00:00.000Z" });
-    expect(a.accepted.map((x) => x.observation.id)).toEqual(b.accepted.map((x) => x.observation.id));
+  it("المتجر غير المعروف يُقترح للمراجعة ولا يُخمَّن", () => {
+    const r = run("network.csv");
+    expect(r.summary.storePending).toBe(2);
+    expect(r.storeProposals.map((p) => p.rawName).sort()).toEqual(["", "Test Store Epsilon"]);
+    expect(r.accepted.find((a) => a.offer.storeName === "Test Store Alpha")!.offer.storeId).toBe("alpha");
   });
 });
 
-describe("حالات أخرى", () => {
-  it("العملة مفقودة بلا عملة افتراضية = مرفوض؛ ومع عملة المصدر = مقبول بتحذير", () => {
-    const csv = "name,price,link,store\nItem,100,https://x.example.com/1,Shop";
-    expect(runImport({ source: src(), fileName: "a.csv", content: csv, catalog, importedAt: at }).rejected[0].issues[0].code).toBe("missing_currency");
-    const ok = runImport({ source: src({ defaultCurrency: "SAR" }), fileName: "a.csv", content: csv, catalog, importedAt: at });
-    expect(ok.summary.accepted).toBe(1);
-    expect(ok.warnings.some((w) => w.code === "default_currency")).toBe(true);
+describe("قواعد الصف", () => {
+  const H = ["title", "price", "sale_price", "currency", "link", "store", "updated_at"];
+  const one = (vals: (string | number)[], over = {}) =>
+    runImport({ source: src(over), fileName: "x.csv", content: csv([H, vals]), catalog: TEST_CATALOG, importedAt: AT, registry: TEST_REGISTRY });
+
+  it("ترفض الأسعار العلمية والملتبسة والنص الزائد", () => {
+    expect(one(["P", "1e3", "", "SAR", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("price_scientific");
+    expect(one(["P", "1.299", "", "KWD", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("price_ambiguous");
+    expect(one(["P", "من 999", "", "SAR", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("price_extra_text");
   });
 
-  it("سعر غير منطقي (مثل الهللات) يُرفض", () => {
-    const csv = "name,price,currency,link,store\nItem,199900000,SAR,https://x.example.com/1,Shop";
-    expect(runImport({ source: src(), fileName: "a.csv", content: csv, catalog, importedAt: at }).rejected[0].issues[0].code).toBe("implausible_price");
+  it("ترفض تعارض العملة بين النص والعمود", () => {
+    expect(one(["P", "999 USD", "", "SAR", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("conflicting_currency");
   });
 
-  it("ملف فارغ لا يسبب خطأ", () => {
-    const r = runImport({ source: src(), fileName: "a.csv", content: "", catalog, importedAt: at });
-    expect(r.totalRows).toBe(0);
+  it("سعر الخصم الأعلى من الأصلي يُتجاهل مع تحذير", () => {
+    const r = one(["P", "1000", "1200", "SAR", "https://alpha.example.com/1", "alpha", ""]);
+    expect(r.accepted[0].offer).toMatchObject({ price: { amount: 1000 }, listPrice: null });
+    expect(r.warnings.map((w) => w.code)).toContain("sale_above_regular");
+  });
+
+  it("سعر خصم غير صالح يرفض الصف بدل تجاهله", () => {
+    expect(one(["P", "1000", "abc", "SAR", "https://alpha.example.com/1", "alpha", ""]).summary.rejected).toBe(1);
+  });
+
+  it("السعر غير المنطقي (هللات) يُرفض", () => {
+    expect(one(["P", "199900000", "", "SAR", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("implausible_price");
+  });
+
+  it("التاريخ المستقبلي يُتجاهل", () => {
+    const r = one(["P", "1000", "", "SAR", "https://alpha.example.com/1", "alpha", "2027-01-01T00:00:00Z"]);
+    expect(r.accepted[0].offer.sourceUpdatedAt).toBe(null);
+    expect(r.warnings.map((w) => w.code)).toContain("future_date");
+  });
+
+  it("العملة الافتراضية للمصدر تُستخدم مع تحذير", () => {
+    const r = one(["P", "1000", "", "", "https://alpha.example.com/1", "alpha", ""], { defaultCurrency: "SAR" });
+    expect(r.accepted[0].offer.price.currency).toBe("SAR");
+    expect(r.warnings.map((w) => w.code)).toContain("default_currency");
+    expect(one(["P", "1000", "", "", "https://alpha.example.com/1", "alpha", ""]).rejected[0].issues.map((i) => i.code)).toContain("missing_currency");
+  });
+
+  it("الأعمدة الناقصة تُرفض كصف ولا تُدمج", () => {
+    const r = runImport({ source: src(), fileName: "x.csv", content: `${H.join(",")}\nP,1000,,SAR\nQ,900,,SAR,https://alpha.example.com/2,alpha,`, catalog: TEST_CATALOG, importedAt: AT, registry: TEST_REGISTRY });
+    expect(r.rejected.map((x) => [x.row, x.issues[0].code])).toEqual([[2, "column_count_mismatch"]]);
+    expect(r.accepted.map((a) => a.offer.name)).toEqual(["Q"]);
+  });
+});
+
+describe("معرّف المصدر", () => {
+  it("يجب أن يكون ثابتًا وآمنًا", () => {
+    expect(isValidSourceId("admitad-store-x")).toBe(true);
+    expect(isValidSourceId("Admitad Store")).toBe(false);
+    expect(isValidSourceId("../etc")).toBe(false);
+    const r = runImport({ source: src({ id: "BAD ID" }), fileName: "x.csv", content: "a\n1", catalog: TEST_CATALOG, importedAt: AT });
+    expect(r.fatal?.code).toBe("invalid_source");
+    expect(r.accepted).toEqual([]);
   });
 });

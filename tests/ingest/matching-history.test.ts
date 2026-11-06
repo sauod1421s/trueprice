@@ -1,154 +1,292 @@
 import { describe, expect, it } from "vitest";
-import products from "@/app/data/products";
 import {
-  appendObservations,
   appendVerification,
+  applyImport,
+  EMPTY_HISTORY,
   effectiveStatus,
-  toObservation,
+  type HistoryState,
   valuationOffersFor,
 } from "@/app/lib/ingest/history";
-import { catalogFromProducts, matchOffer, type CatalogEntry } from "@/app/lib/ingest/matching";
-import { resolveStoreKey } from "@/app/lib/ingest/stores";
-import type { NormalizedOffer, VerificationEvent } from "@/app/lib/ingest/types";
+import { runImport, type ImportResult } from "@/app/lib/ingest/importer";
+import { buildCatalogIndex, matchOffer } from "@/app/lib/ingest/matching";
+import { canonicalProductUrl, resolveStore, sellerKeyFor } from "@/app/lib/ingest/stores";
+import type { ApprovedAliases } from "@/app/lib/ingest/stores";
 import { electronicsFairPrice } from "@/app/lib/valuation/electronics";
+import { csv, src, TEST_CATALOG, TEST_REGISTRY } from "./helpers";
 
-const offer = (over: Partial<NormalizedOffer> = {}): NormalizedOffer => ({
-  row: 2,
-  sourceId: "s1",
-  externalId: "X1",
-  name: "Test Phone X 256GB",
-  price: 1000,
-  listPrice: null,
-  currency: "SAR",
-  url: "https://a.example.com/1",
-  store: "Store A",
-  storeKey: "storea",
-  gtin: null,
-  mpn: null,
-  brand: "TestBrand",
-  availability: "in_stock",
-  condition: "new",
-  sourceUpdatedAt: "2026-11-05T10:00:00.000Z",
-  ...over,
+const HEAD = ["id", "title", "price", "sale_price", "currency", "link", "store", "seller", "gtin", "availability", "condition", "updated_at"];
+
+function imp(rows: (string | number)[][], at: string, aliases: ApprovedAliases = {}): ImportResult {
+  return runImport({
+    source: src({ timeZone: "Asia/Riyadh" }),
+    fileName: "f.csv",
+    content: csv([HEAD, ...rows]),
+    catalog: TEST_CATALOG,
+    importedAt: at,
+    registry: TEST_REGISTRY,
+    approvedAliases: aliases,
+  });
+}
+
+function apply(state: HistoryState, r: ImportResult) {
+  return applyImport(state, {
+    sourceId: r.sourceId,
+    contentHash: r.contentHash,
+    importId: r.importId,
+    importedAt: r.importedAt,
+    rows: r.accepted.map((a) => ({ offer: a.offer, productId: a.match.status === "matched" ? a.match.productId : null })),
+  });
+}
+
+const row = (over: Partial<Record<(typeof HEAD)[number], string | number>> = {}) => {
+  const base: Record<string, string | number> = {
+    id: "A-1",
+    title: "Test Phone X 256GB",
+    price: "1999",
+    sale_price: "",
+    currency: "SAR",
+    link: "https://alpha.example.com/p/1",
+    store: "Test Store Alpha",
+    seller: "",
+    gtin: "4006381333931",
+    availability: "in stock",
+    condition: "new",
+    updated_at: "2026-11-05T10:00:00+03:00",
+    ...over,
+  };
+  return HEAD.map((h) => base[h]);
+};
+
+describe("هوية المتجر: معرّف ثابت وأسماء بديلة يعتمدها المشرف", () => {
+  it("الاسم المعروف أو النطاق يعطي نفس المعرّف الثابت", () => {
+    expect(resolveStore({ storeName: "TEST STORE  alpha", canonicalUrl: null, registry: TEST_REGISTRY })).toMatchObject({ status: "resolved", storeId: "alpha" });
+    expect(resolveStore({ storeName: "", canonicalUrl: "https://www.alpha.example.com/x", registry: TEST_REGISTRY })).toMatchObject({ status: "resolved", storeId: "alpha", via: "domain" });
+  });
+
+  it("'Gamma Electronics' لا يُدمج تلقائيًا مع 'Gamma' — يبقى بانتظار المشرف مع اقتراح", () => {
+    const r = resolveStore({ storeName: "Gamma Electronics", canonicalUrl: "https://shop.other.example.net/p", registry: TEST_REGISTRY });
+    expect(r).toMatchObject({ status: "pending", suggestedStoreId: "gamma" });
+  });
+
+  it("بعد اعتماد الاسم البديل يُحسب المتجران متجرًا واحدًا في التقييم", () => {
+    const rows = [
+      row({ id: "G1", store: "Gamma", link: "https://gamma.example.com/p/1", price: "1900" }),
+      row({ id: "G2", store: "Gamma Electronics", link: "https://gamma-electronics.example.net/p/1", price: "1950" }),
+    ];
+    const before = imp(rows, "2026-11-06T10:00:00.000Z");
+    expect(before.summary.storePending).toBe(1);
+    expect(before.storeProposals[0]).toMatchObject({ rawName: "Gamma Electronics", suggestedStoreId: "gamma" });
+    const s1 = apply(EMPTY_HISTORY, before);
+    expect(s1.stats.skippedPendingStore).toBe(1);
+
+    const after = imp(rows, "2026-11-06T11:00:00.000Z", { gammaelectronics: "gamma" });
+    expect(after.summary.storePending).toBe(0);
+    const { state } = apply(EMPTY_HISTORY, after);
+    const stores = valuationOffersFor(1, state, { now: "2026-11-06T12:00:00.000Z" }).offers.map((o) => o.store);
+    expect(new Set(stores)).toEqual(new Set(["gamma"]));
+  });
+
+  it("الاسم والنطاق المتعارضان لا يُحسمان تلقائيًا", () => {
+    const r = resolveStore({ storeName: "Gamma", canonicalUrl: "https://alpha.example.com/p", registry: TEST_REGISTRY });
+    expect(r).toMatchObject({ status: "pending", suggestedStoreId: "alpha" });
+  });
+
+  it("معرّف متجر المصدر غير الموجود لا يُقبل", () => {
+    expect(resolveStore({ storeName: "x", canonicalUrl: null, sourceStoreId: "ghost", registry: TEST_REGISTRY }).status).toBe("pending");
+  });
 });
 
-const catalog: CatalogEntry[] = [
-  { id: 1, label: "Phone 256", brand: "TestBrand", names: ["Test Phone X 256GB"], gtins: ["04006381333931"], mpns: ["TPX256"] },
-  { id: 2, label: "Phone 512", brand: "TestBrand", names: ["Test Phone X 512GB"], gtins: [], mpns: ["TPX512"] },
-  { id: 3, label: "Other 256", brand: "OtherBrand", names: ["Other Phone 256GB"], gtins: [], mpns: ["TPX256"] },
-];
+describe("البائع منفصل عن المتجر", () => {
+  it("بائعان في متجر متعدد البائعين = مساران سعريان لكن متجر واحد في التقييم", () => {
+    const r = imp(
+      [
+        row({ id: "M1", store: "Test Market", seller: "Seller One", link: "https://market.example.com/p/1", price: "1800" }),
+        row({ id: "M1", store: "Test Market", seller: "Seller Two", link: "https://market.example.com/p/1", price: "1850" }),
+        row({ id: "M1", store: "Test Market", seller: "Test Market", link: "https://market.example.com/p/1", price: "1900" }),
+      ],
+      AT_DAY
+    );
+    expect(r.accepted.map((a) => a.offer.sellerKey)).toEqual(["sellerone", "sellertwo", null]);
+    expect(new Set(r.accepted.map((a) => a.streamKey)).size).toBe(3);
+    const { state } = apply(EMPTY_HISTORY, r);
+    const offers = valuationOffersFor(1, state, { now: AT_DAY }).offers;
+    expect(offers).toHaveLength(3);
+    expect(new Set(offers.map((o) => o.store))).toEqual(new Set(["market"]));
+  });
+
+  it("البائع الذي يحمل اسم المتجر نفسه ليس بائعًا خارجيًا", () => {
+    expect(sellerKeyFor("Test Market", "market", TEST_REGISTRY)).toBe(null);
+    expect(sellerKeyFor("  ", "market", TEST_REGISTRY)).toBe(null);
+  });
+});
+
+const AT_DAY = "2026-11-06T12:00:00.000Z";
+
+describe("سجل الأسعار: إضافة فقط وبلا تكرار غير ضروري", () => {
+  const day1 = imp([row()], "2026-11-06T08:00:00.000Z");
+  const s1 = apply(EMPTY_HISTORY, day1);
+
+  it("أول ظهور ينشئ حالة سعر وحدث first_seen", () => {
+    expect(s1.stats).toMatchObject({ newObservations: 1, priceChanges: 0 });
+    expect(s1.state.events.map((e) => e.kind)).toEqual(["first_seen"]);
+    expect(s1.state.observations[0]).toMatchObject({ storeId: "alpha", initialStatus: "unverified", price: { amount: 1999, currency: "SAR" } });
+    expect(Object.isFrozen(s1.state.observations[0])).toBe(true);
+  });
+
+  it("الملف نفسه مرتين لا يغيّر شيئًا", () => {
+    const again = apply(s1.state, day1);
+    expect(again.stats.duplicateFile).toBe(true);
+    expect(again.state).toBe(s1.state);
+  });
+
+  it("نفس السعر في ملف أحدث يحدّث آخر ظهور فقط", () => {
+    const day2 = imp([row({ updated_at: "2026-11-06T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, day2);
+    expect(s2.stats).toMatchObject({ newObservations: 0, refreshed: 1 });
+    expect(s2.state.observations).toHaveLength(1);
+    expect(s2.state.events).toHaveLength(1);
+    const p = Object.values(s2.state.pointers)[0];
+    expect(p.lastSeenAt).toBe("2026-11-06T09:00:00.000Z");
+    expect(p.lastAsOf).toBe("2026-11-06T07:00:00.000Z");
+  });
+
+  it("تغيّر السعر ينشئ حالة جديدة ويحتفظ بالقديمة", () => {
+    const day2 = imp([row({ price: "1899", updated_at: "2026-11-06T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, day2);
+    expect(s2.stats.priceChanges).toBe(1);
+    expect(s2.state.observations.map((o) => o.price.amount)).toEqual([1999, 1899]);
+    expect(s2.state.events[1]).toMatchObject({ kind: "price_changed", previousObservationId: s1.state.observations[0].id });
+    // الحالة السابقة لم تتغير
+    expect(s1.state.observations).toHaveLength(1);
+  });
+
+  it("تغيّر السعر قبل الخصم وحده يُسجل كتغيّر سعر", () => {
+    const day2 = imp([row({ price: "2199", sale_price: "1999", updated_at: "2026-11-06T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, day2);
+    expect(s2.stats.priceChanges).toBe(1);
+    expect(s2.state.observations[1]).toMatchObject({ price: { amount: 1999 }, listPrice: { amount: 2199 } });
+  });
+
+  it("تغيّر بارامترات التتبع فقط لا ينشئ حدثًا؛ تغيّر الرابط الفعلي ينشئ url_changed", () => {
+    const tracked = imp([row({ link: "https://alpha.example.com/p/1?utm_source=x&gclid=1" })], "2026-11-06T09:00:00.000Z");
+    const sT = apply(s1.state, tracked);
+    expect(sT.stats.urlChanges).toBe(0);
+    const moved = imp([row({ link: "https://alpha.example.com/p/1-new" })], "2026-11-06T09:30:00.000Z");
+    const sM = apply(sT.state, moved);
+    expect(sM.stats.urlChanges).toBe(1);
+    expect(sM.state.events.at(-1)).toMatchObject({ kind: "url_changed", from: "https://alpha.example.com/p/1", to: "https://alpha.example.com/p/1-new" });
+  });
+
+  it("تغيّر التوفر يُسجل كحدث دون حالة سعر جديدة", () => {
+    const oos = imp([row({ availability: "out of stock", updated_at: "2026-11-06T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, oos);
+    expect(s2.stats).toMatchObject({ availabilityChanges: 1, newObservations: 0 });
+    expect(s2.state.events.at(-1)).toMatchObject({ kind: "availability_changed", from: "in_stock", to: "out_of_stock" });
+  });
+
+  it("ملف أقدم مما لدينا لا يعيد السعر للخلف", () => {
+    const old = imp([row({ price: "2500", updated_at: "2026-11-01T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, old);
+    expect(s2.stats.staleIgnored).toBe(1);
+    expect(s2.state.observations).toHaveLength(1);
+  });
+
+  it("الاسم المختلف للمتجر نفسه لا ينشئ مسارًا جديدًا", () => {
+    const alias = imp([row({ store: "ALPHA", updated_at: "2026-11-06T10:00:00+03:00" })], "2026-11-06T09:00:00.000Z");
+    const s2 = apply(s1.state, alias);
+    expect(s2.stats).toMatchObject({ newObservations: 0, refreshed: 1 });
+  });
+});
+
+describe("سياسة عمر السعر والتقييم", () => {
+  const stores = ["alpha", "gamma", "delta"];
+  const links = ["https://alpha.example.com/p/1", "https://gamma.example.com/p/1", "https://delta.example.sa/p/1"];
+  const r = imp(
+    stores.map((_, i) => row({ id: `S${i}`, store: "", link: links[i], price: String(2000 + i * 10), updated_at: "2026-11-01T10:00:00+03:00" })),
+    "2026-11-01T08:00:00.000Z"
+  );
+  const { state } = apply(EMPTY_HISTORY, r);
+  const verified = state.observations.reduce(
+    (s, o) => appendVerification(s, { observationId: o.id, status: "verified", at: "2026-11-01T09:00:00.000Z", by: "reviewer-1" }),
+    state
+  );
+
+  it("الأسعار الحديثة الموثقة من 3 متاجر تعطي سعرًا عادلًا", () => {
+    const { offers, excluded } = valuationOffersFor(1, verified, { now: "2026-11-06T00:00:00.000Z" });
+    expect(excluded).toEqual([]);
+    expect(electronicsFairPrice(offers).status).toBe("available");
+  });
+
+  it("الأسعار الأقدم من 14 يومًا تُستبعد من السعر العادل", () => {
+    const { offers, excluded } = valuationOffersFor(1, verified, { now: "2026-11-20T00:00:00.000Z" });
+    expect(offers).toEqual([]);
+    expect(excluded.map((e) => e.reason)).toEqual(["stale", "stale", "stale"]);
+    expect(electronicsFairPrice(offers).status).not.toBe("available");
+  });
+
+  it("الحد قابل للضبط", () => {
+    expect(valuationOffersFor(1, verified, { now: "2026-11-06T00:00:00.000Z", maxAgeDays: 2 }).offers).toEqual([]);
+  });
+
+  it("غير الموثق لا يدخل السعر العادل", () => {
+    const { offers } = valuationOffersFor(1, state, { now: "2026-11-06T00:00:00.000Z" });
+    expect(offers.every((o) => o.verificationStatus === "unverified")).toBe(true);
+    expect(electronicsFairPrice(offers).status).not.toBe("available");
+  });
+
+  it("المستعمل والعملة الأجنبية وغير المتوفر لا تدخل تقييم الجديد", () => {
+    const mixed = imp(
+      [
+        row({ id: "U", condition: "used", price: "1200" }),
+        row({ id: "F", currency: "USD", price: "500", link: "https://gamma.example.com/p/2", store: "" }),
+        row({ id: "O", availability: "out of stock", link: "https://delta.example.sa/p/9", store: "" }),
+      ],
+      "2026-11-06T08:00:00.000Z"
+    );
+    const s = apply(EMPTY_HISTORY, mixed).state;
+    const ex = valuationOffersFor(1, s, { now: "2026-11-06T09:00:00.000Z" }).excluded.map((e) => e.reason).sort();
+    expect(ex).toEqual(["not_sar", "other_condition", "out_of_stock"]);
+    expect(valuationOffersFor(1, s, { now: "2026-11-06T09:00:00.000Z", condition: "used" }).offers).toHaveLength(1);
+  });
+});
+
+describe("التحقق كأحداث مضافة", () => {
+  it("الحالة الفعلية = آخر حدث زمنيًا (مقارنة زمنية لا نصية)", () => {
+    const ev = [
+      { observationId: "o1", status: "verified" as const, at: "2026-11-06T10:00:00+03:00", by: "a" },
+      { observationId: "o1", status: "rejected" as const, at: "2026-11-06T08:00:00.000Z", by: "b" },
+    ];
+    // 10:00+03:00 = 07:00Z، إذن الرفض (08:00Z) هو الأحدث
+    expect(effectiveStatus("o1", ev)).toBe("rejected");
+    expect(effectiveStatus("o2", ev)).toBe("unverified");
+  });
+});
+
+describe("الروابط", () => {
+  it("يستخرج الوجهة من روابط التتبع ويحذف بارامترات التتبع ويرتب البقية", () => {
+    expect(canonicalProductUrl("https://ad.admitad.com/g/abc/?ulp=https%3A%2F%2Fwww.jarir.com%2Fp%2F1%3Futm_source%3Dx%26b%3D2%26a%3D1")).toBe("https://jarir.com/p/1?a=1&b=2");
+    expect(canonicalProductUrl("https://go.arabclicks.com/aff_c?offer=2")).toBe(null);
+    expect(canonicalProductUrl("javascript:alert(1)")).toBe(null);
+  });
+});
 
 describe("المطابقة", () => {
-  it("1) الباركود أولًا", () => {
-    expect(matchOffer(offer({ gtin: "04006381333931" }), catalog)).toMatchObject({ status: "matched", method: "gtin", productId: 1 });
+  const index = buildCatalogIndex(TEST_CATALOG);
+  const offerOf = (name: string, gtin: string | null = null, mpn: string | null = null) => {
+    const r = imp([row({ title: name, gtin: gtin ?? "" })], AT_DAY);
+    const o = r.accepted[0].offer;
+    return { ...o, mpn };
+  };
+
+  it("الباركود يطابق تلقائيًا", () => {
+    expect(matchOffer(offerOf("whatever", "4006381333931"), index)).toMatchObject({ status: "matched", method: "gtin", productId: 1 });
   });
 
-  it("الباركود مع شركة مختلفة = مراجعة وليس دمجًا", () => {
-    expect(matchOffer(offer({ gtin: "04006381333931", brand: "OtherBrand" }), catalog).status).toBe("needs_review");
-  });
-
-  it("2) رقم الموديل + الشركة", () => {
-    expect(matchOffer(offer({ mpn: "TPX256" }), catalog)).toMatchObject({ status: "matched", method: "model", productId: 1 });
-  });
-
-  it("رقم موديل بدون شركة = مراجعة (قد يتكرر بين الشركات)", () => {
-    expect(matchOffer(offer({ mpn: "TPX256", brand: null }), catalog).status).toBe("needs_review");
-  });
-
-  it("3) الاسم وحده لا يُدمج تلقائيًا أبدًا", () => {
-    const r = matchOffer(offer(), catalog);
-    expect(r.status).toBe("needs_review");
-    if (r.status === "needs_review") expect(r.candidates[0].productId).toBe(1);
-  });
-
-  it("اختلاف السعة (256 مقابل 512) لا يُعتبر مرشحًا", () => {
-    const r = matchOffer(offer({ name: "Test Phone X 1TB" }), catalog);
-    expect(r.status).toBe("unmatched");
-  });
-
-  it("الكتالوج الحالي بلا باركود: المطابقة تذهب للمراجعة ولا تُدمج", () => {
-    const real = catalogFromProducts(products);
-    const p = products[0];
-    const r = matchOffer(offer({ name: p.name, brand: p.brand }), real);
-    expect(r.status).toBe("needs_review");
-    if (r.status === "needs_review") expect(r.candidates[0].productId).toBe(p.id);
-  });
-});
-
-describe("مفتاح المتجر", () => {
-  it("نفس المتجر بكتابات مختلفة = مفتاح واحد", () => {
-    expect(resolveStoreKey("نون", "")).toBe("noon");
-    expect(resolveStoreKey("noon.com", "")).toBe("noon");
-    expect(resolveStoreKey("", "https://www.noon.com/saudi-ar/p/1")).toBe("noon");
-    expect(resolveStoreKey("مكتبة جرير", "")).toBe("jarir");
-    expect(resolveStoreKey("", "https://www.amazon.sa/dp/X")).toBe("amazon");
-  });
-
-  it("رابط تتبع شبكة العمولة لا يحدد المتجر", () => {
-    expect(resolveStoreKey("", "https://ad.admitad.com/goto/abc")).toBeNull();
-    expect(resolveStoreKey("", "https://go.arabclicks.com/aff_c?offer=1")).toBeNull();
-  });
-});
-
-describe("سجل الأسعار الإلحاقي", () => {
-  const o1 = toObservation(offer({ productId: undefined } as Partial<NormalizedOffer>), 1, "imp1", "2026-11-06T10:00:00.000Z");
-
-  it("لا يستبدل القديم ولا يكرر نفس الملاحظة", () => {
-    const first = appendObservations([], [o1]);
-    const again = appendObservations(first.history, [o1]);
-    expect(again.added).toBe(0);
-    expect(again.duplicates).toBe(1);
-    expect(again.history).toHaveLength(1);
-  });
-
-  it("سعر جديد لنفس المنتج = ملاحظة إضافية، والقديمة تبقى كما هي", () => {
-    const o2 = toObservation(offer({ price: 950, sourceUpdatedAt: "2026-11-06T10:00:00.000Z" }), 1, "imp2", "2026-11-06T12:00:00.000Z");
-    const h1 = appendObservations([], [o1]).history;
-    const h2 = appendObservations(h1, [o2]).history;
-    expect(h2).toHaveLength(2);
-    expect(h2[0]).toEqual(o1);
-    expect(h1).toHaveLength(1); // المصفوفة القديمة لم تتغير
-    expect(Object.isFrozen(h2[1])).toBe(true);
-  });
-
-  it("تغيير حالة التحقق = حدث جديد، والحالة الفعلية = آخر حدث", () => {
-    let events: VerificationEvent[] = [];
-    expect(effectiveStatus(o1.id, events)).toBe("unverified");
-    events = appendVerification(events, { observationId: o1.id, status: "verified", at: "2026-11-06T13:00:00Z", by: "admin" });
-    events = appendVerification(events, { observationId: o1.id, status: "rejected", at: "2026-11-06T14:00:00Z", by: "admin" });
-    expect(events).toHaveLength(2);
-    expect(effectiveStatus(o1.id, events)).toBe("rejected");
-  });
-});
-
-describe("الربط مع محرك السعر العادل", () => {
-  const mk = (storeKey: string, price: number, updated: string, imp = "i") =>
-    toObservation(offer({ storeKey, store: storeKey, externalId: `${storeKey}-${price}`, price, sourceUpdatedAt: updated }), 1, imp, "2026-11-06T10:00:00.000Z");
-
-  it("الأسعار المستوردة غير الموثقة لا تدخل في السعر العادل", () => {
-    const history = [mk("a", 1000, "2026-11-05"), mk("b", 1100, "2026-11-05"), mk("c", 1200, "2026-11-05")];
-    const r = electronicsFairPrice(valuationOffersFor(1, history, []));
-    expect(r.fairPrice).toBeNull();
-    expect(r.status).toBe("unverified-data");
-  });
-
-  it("المتجر نفسه من شبكتين يُحتسب مرة واحدة (آخر سعر)", () => {
-    const viaAdmitad = mk("noon", 1000, "2026-11-04");
-    const viaArabClicks = mk("noon", 990, "2026-11-05");
-    const offers = valuationOffersFor(1, [viaAdmitad, viaArabClicks], []);
-    expect(offers).toHaveLength(1);
-    expect(offers[0].price).toBe(990);
-  });
-
-  it("بعد التحقق من 3 متاجر مختلفة يظهر السعر العادل", () => {
-    const history = [mk("a", 1000, "2026-11-05"), mk("b", 1100, "2026-11-05"), mk("c", 1200, "2026-11-05")];
-    const events = history.map((o) => ({ observationId: o.id, status: "verified" as const, at: "2026-11-06T00:00:00Z", by: "admin" }));
-    expect(electronicsFairPrice(valuationOffersFor(1, history, events))).toMatchObject({ fairPrice: 1100, status: "available" });
-  });
-
-  it("المستعمل لا يختلط بالجديد", () => {
-    const usedObs = toObservation(offer({ condition: "used", storeKey: "d", price: 500 }), 1, "i", "2026-11-06T10:00:00.000Z");
-    expect(valuationOffersFor(1, [usedObs], [])).toHaveLength(0);
-    expect(valuationOffersFor(1, [usedObs], [], "used")).toHaveLength(1);
+  it("الاسم وحده لا يدمج تلقائيًا أبدًا، والأرقام يجب أن تتطابق", () => {
+    const m = matchOffer(offerOf("TestBrand Test Phone X 256GB"), index);
+    expect(m.status).toBe("needs_review");
+    if (m.status === "needs_review") expect(m.candidates[0].productId).toBe(1);
+    const n = matchOffer(offerOf("Test Phone X 1TB"), index);
+    if (n.status === "needs_review") expect(n.candidates.map((c) => c.productId)).not.toContain(1);
   });
 });

@@ -1,9 +1,14 @@
 /**
  * قارئ CSV (RFC 4180) بدون مكتبات خارجية.
- * يدعم: علامات الاقتباس، الاقتباس المزدوج داخل الحقل، الأسطر المتعددة داخل
- * الحقل، CRLF، BOM، واكتشاف الفاصل تلقائيًا ( , ; tab | ).
+ *
+ * - يدعم: علامات الاقتباس، الاقتباس المزدوج، الأسطر المتعددة داخل الحقل،
+ *   CRLF، BOM، واكتشاف الفاصل ( , ; tab | ).
+ * - علامة اقتباس غير مغلقة = خطأ يوقف الملف (لا ندمج الصفوف بصمت).
+ * - صف بعدد أعمدة مختلف = صف مرفوض بسبب واضح.
+ * - حدود داخلية: عدد الصفوف والأعمدة وطول الحقل.
  */
 
+import { DEFAULT_LIMITS, ImportFatalError, type ImportLimits } from "./limits";
 import type { RawRecord } from "./types";
 
 const DELIMITERS = [",", ";", "\t", "|"] as const;
@@ -14,39 +19,59 @@ export function stripBom(text: string): string {
 
 /** يكتشف الفاصل من السطر الأول (خارج علامات الاقتباس) */
 export function detectDelimiter(text: string): string {
-  const firstLine: string[] = [];
   let inQuotes = false;
-  for (const ch of text) {
+  const counts: Record<string, number> = {};
+  for (let i = 0; i < text.length && i < 64_000; i++) {
+    const ch = text[i];
     if (ch === '"') inQuotes = !inQuotes;
     else if (!inQuotes && (ch === "\n" || ch === "\r")) break;
-    firstLine.push(ch);
+    else if (!inQuotes && (DELIMITERS as readonly string[]).includes(ch)) counts[ch] = (counts[ch] ?? 0) + 1;
   }
-  const line = firstLine.join("");
   let best = ",";
   let bestCount = 0;
   for (const d of DELIMITERS) {
-    let count = 0;
-    let q = false;
-    for (const ch of line) {
-      if (ch === '"') q = !q;
-      else if (!q && ch === d) count++;
-    }
-    if (count > bestCount) {
+    if ((counts[d] ?? 0) > bestCount) {
       best = d;
-      bestCount = count;
+      bestCount = counts[d];
     }
   }
   return best;
 }
 
-/** يحوّل النص إلى صفوف من الحقول */
-export function parseCsvRows(input: string, delimiter?: string): string[][] {
+export type CsvRow = { line: number; cells: string[] };
+
+/** يحوّل النص إلى صفوف، مع رقم السطر الذي يبدأ عنده كل صف */
+export function parseCsvRows(input: string, limits: ImportLimits = DEFAULT_LIMITS, delimiter?: string): CsvRow[] {
   const text = stripBom(input);
   const d = delimiter ?? detectDelimiter(text);
-  const rows: string[][] = [];
-  let row: string[] = [];
+  const rows: CsvRow[] = [];
+  let cells: string[] = [];
   let field = "";
   let inQuotes = false;
+  let line = 1;
+  let rowStartLine = 1;
+  let quoteStartLine = 1;
+
+  const pushField = () => {
+    if (field.length > limits.maxFieldLength) {
+      throw new ImportFatalError("field_too_long", `حقل أطول من ${limits.maxFieldLength} حرف (سطر ${rowStartLine})`, rowStartLine);
+    }
+    cells.push(field);
+    field = "";
+    if (cells.length > limits.maxColumns) {
+      throw new ImportFatalError("too_many_columns", `أكثر من ${limits.maxColumns} عمود (سطر ${rowStartLine})`, rowStartLine);
+    }
+  };
+  const pushRow = () => {
+    if (cells.some((c) => c.trim() !== "")) {
+      rows.push({ line: rowStartLine, cells });
+      // +1 للرأس
+      if (rows.length > limits.maxRows + 1) {
+        throw new ImportFatalError("too_many_rows", `الملف يحتوي أكثر من ${limits.maxRows} صف`, rowStartLine);
+      }
+    }
+    cells = [];
+  };
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
@@ -60,55 +85,83 @@ export function parseCsvRows(input: string, delimiter?: string): string[][] {
           inQuotes = false;
         }
       } else {
+        if (ch === "\n") line++;
         field += ch;
+        if (field.length > limits.maxFieldLength) {
+          throw new ImportFatalError("field_too_long", `حقل أطول من ${limits.maxFieldLength} حرف (يبدأ في سطر ${quoteStartLine})`, quoteStartLine);
+        }
       }
       continue;
     }
 
     if (ch === '"' && field === "") {
       inQuotes = true;
+      quoteStartLine = line;
     } else if (ch === d) {
-      row.push(field);
-      field = "";
+      pushField();
     } else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
+      pushField();
+      pushRow();
+      line++;
+      rowStartLine = line;
     } else {
       field += ch;
+      if (field.length > limits.maxFieldLength) {
+        throw new ImportFatalError("field_too_long", `حقل أطول من ${limits.maxFieldLength} حرف (سطر ${rowStartLine})`, rowStartLine);
+      }
     }
   }
 
-  if (field !== "" || row.length > 0) {
-    row.push(field);
-    rows.push(row);
+  if (inQuotes) {
+    throw new ImportFatalError(
+      "unterminated_quote",
+      `علامة اقتباس مفتوحة في سطر ${quoteStartLine} لم تُغلق حتى نهاية الملف — الملف غير مكتمل أو تالف، ولم يُستورد شيء`,
+      quoteStartLine
+    );
   }
-
-  // تجاهل الأسطر الفارغة تمامًا
-  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+  if (field !== "" || cells.length > 0) {
+    pushField();
+    pushRow();
+  }
+  return rows;
 }
+
+export type CsvRowError = { row: number; code: "column_count_mismatch"; message: string };
 
 /**
  * يحوّل CSV إلى سجلات مفاتيحها رؤوس الأعمدة.
- * رقم الصف في النتيجة = رقم السطر في الملف (الرأس = 1).
+ * رقم الصف = رقم السطر في الملف الذي يبدأ عنده الصف.
  */
-export function parseCsv(input: string): {
-  headers: string[];
-  records: { row: number; record: RawRecord }[];
-} {
-  const rows = parseCsvRows(input);
-  if (rows.length === 0) return { headers: [], records: [] };
+export function parseCsv(
+  input: string,
+  limits: ImportLimits = DEFAULT_LIMITS
+): { headers: string[]; records: { row: number; record: RawRecord }[]; rowErrors: CsvRowError[] } {
+  const rows = parseCsvRows(input, limits);
+  if (rows.length === 0) return { headers: [], records: [], rowErrors: [] };
 
-  const headers = rows[0].map((h) => h.trim());
-  const records = rows.slice(1).map((cells, i) => {
-    const record: RawRecord = {};
+  const headers = rows[0].cells.map((h) => h.trim());
+  const records: { row: number; record: RawRecord }[] = [];
+  const rowErrors: CsvRowError[] = [];
+
+  for (const { line, cells } of rows.slice(1)) {
+    // أعمدة زائدة فارغة (فاصل في نهاية السطر) مقبولة؛ غير ذلك = صف مرفوض
+    const extra = cells.slice(headers.length);
+    if (cells.length < headers.length || extra.some((c) => c.trim() !== "")) {
+      rowErrors.push({
+        row: line,
+        code: "column_count_mismatch",
+        message: `عدد الأعمدة ${cells.length} لا يطابق الرأس (${headers.length}) — قد يكون السطر مقطوعًا أو فيه فاصل زائد`,
+      });
+      continue;
+    }
+    // Object.create(null) يمنع أي تأثير لأعمدة باسم __proto__
+    const record: RawRecord = Object.create(null);
     headers.forEach((h, j) => {
       if (h) record[h] = (cells[j] ?? "").trim();
     });
-    return { row: i + 2, record };
-  });
+    records.push({ row: line, record });
+  }
 
-  return { headers, records };
+  return { headers, records, rowErrors };
 }

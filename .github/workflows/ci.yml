@@ -18,5 +18,17 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      # الاختبارات مع حد أدنى للتغطية (يفشل تحته)
+      - run: npm run coverage
       - run: npm run build
+
+  audit:
+    # فحص ثغرات حزم الإنتاج — يفشل عند وجود ثغرة عالية أو حرجة
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm audit --omit=dev --audit-level=high

@@ -4,11 +4,16 @@ import { FileUp, Info, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge, TrustNote, formatNumber } from "../../components/ui";
 import products from "../../data/products";
-import { runImport, type ImportResult } from "../../lib/ingest/importer";
-import { catalogFromProducts } from "../../lib/ingest/matching";
-import type { FeedFormat, MatchResult, SourceConfig } from "../../lib/ingest/types";
+import { applyImport, EMPTY_HISTORY, type ApplyStats, type HistoryState } from "../../lib/ingest/history";
+import { isValidSourceId, runImport, type ImportResult } from "../../lib/ingest/importer";
+import { DEFAULT_LIMITS } from "../../lib/ingest/limits";
+import { buildCatalogIndex, catalogFromProducts } from "../../lib/ingest/matching";
+import { STORE_REGISTRY } from "../../lib/ingest/stores";
+import type { FeedFormat, MatchResult, Money, SourceConfig } from "../../lib/ingest/types";
 
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_FILE_BYTES = DEFAULT_LIMITS.maxBytes;
+
+const money = (m: Money) => `${formatNumber(m.amount)} ${m.currency === "SAR" ? "ريال" : m.currency}`;
 
 const FORMAT_LABEL: Record<FeedFormat, string> = {
   csv: "CSV",
@@ -25,7 +30,7 @@ const AVAILABILITY_LABEL = {
   unknown: "غير معروف",
 } as const;
 
-type Tab = "preview" | "review" | "rejected" | "warnings";
+type Tab = "preview" | "review" | "stores" | "rejected" | "warnings";
 
 function MatchBadge({ match }: { match: MatchResult }) {
   if (match.status === "matched")
@@ -35,9 +40,15 @@ function MatchBadge({ match }: { match: MatchResult }) {
 }
 
 export default function ImportWorkbench() {
-  const catalog = useMemo(() => catalogFromProducts(products), []);
+  const catalog = useMemo(() => buildCatalogIndex(catalogFromProducts(products)), []);
 
+  const [sourceId, setSourceId] = useState("");
   const [sourceName, setSourceName] = useState("");
+  const [timeZone, setTimeZone] = useState("");
+  const [storeId, setStoreId] = useState("");
+  // محاكاة سجل الأسعار في هذه الجلسة فقط (لا يُحفظ)
+  const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY);
+  const [lastApply, setLastApply] = useState<ApplyStats | null>(null);
   const [kind, setKind] = useState<SourceConfig["kind"]>("affiliate_network");
   const [network, setNetwork] = useState("");
   const [defaultStore, setDefaultStore] = useState("");
@@ -50,46 +61,55 @@ export default function ImportWorkbench() {
   const [tab, setTab] = useState<Tab>("preview");
   // سجل هذه الجلسة فقط (لا يُحفظ)
   const [sessionLog, setSessionLog] = useState<
-    { at: string; source: string; file: string; format: FeedFormat; summary: ImportResult["summary"]; error?: string }[]
+    { at: string; source: string; file: string; format: FeedFormat | null; summary: ImportResult["summary"] | null; error?: string }[]
   >([]);
 
   async function preview() {
     setError(null);
     setResult(null);
-    if (!sourceName.trim()) return setError("اكتب اسم المصدر أولًا.");
+    setLastApply(null);
+    if (!isValidSourceId(sourceId.trim())) return setError("اكتب معرّفًا ثابتًا للمصدر: أحرف لاتينية صغيرة وأرقام وشرطة (مثال: admitad-store-x).");
+    if (!sourceName.trim()) return setError("اكتب اسم المصدر.");
     if (!file) return setError("اختر ملفًا.");
-    if (file.size > MAX_FILE_BYTES) return setError("حجم الملف أكبر من 15 ميغابايت.");
+    if (file.size > MAX_FILE_BYTES) return setError("حجم الملف أكبر من الحد المسموح.");
 
     setBusy(true);
     const at = new Date().toISOString();
     try {
       const content = await file.text();
       const source: SourceConfig = {
-        id: sourceName.trim().toLowerCase().replace(/\s+/g, "-"),
+        id: sourceId.trim(),
         name: sourceName.trim(),
         kind,
         network: network.trim() || undefined,
+        storeId: storeId || undefined,
         defaultStore: defaultStore.trim() || undefined,
         defaultCurrency: defaultCurrency || undefined,
+        timeZone: timeZone || undefined,
       };
       const r = runImport({ source, fileName: file.name, content, format, catalog, importedAt: at });
-      setResult(r);
       setTab("preview");
+      if (r.fatal) {
+        setError(r.fatal.message);
+        setSessionLog((log) => [{ at, source: source.name, file: file.name, format: null, summary: null, error: r.fatal!.message }, ...log]);
+        return;
+      }
+      setResult(r);
+      // محاكاة إضافة النتيجة لسجل الأسعار (في الذاكرة فقط)
+      const applied = applyImport(history, {
+        sourceId: source.id,
+        contentHash: r.contentHash,
+        importId: r.importId,
+        importedAt: at,
+        rows: r.accepted.map((a) => ({ offer: a.offer, productId: a.match.status === "matched" ? a.match.productId : null })),
+      });
+      setHistory(applied.state);
+      setLastApply(applied.stats);
       setSessionLog((log) => [{ at, source: source.name, file: file.name, format: r.format, summary: r.summary }, ...log]);
     } catch (e) {
       const msg = (e as Error).message;
       setError(msg);
-      setSessionLog((log) => [
-        {
-          at,
-          source: sourceName,
-          file: file.name,
-          format: "csv",
-          summary: { accepted: 0, rejected: 0, matched: 0, needsReview: 0, unmatched: 0, new: 0, used: 0, refurbished: 0 },
-          error: msg,
-        },
-        ...log,
-      ]);
+      setSessionLog((log) => [{ at, source: sourceName, file: file.name, format: null, summary: null, error: msg }, ...log]);
     } finally {
       setBusy(false);
     }
@@ -121,6 +141,10 @@ export default function ImportWorkbench() {
           <h2 className="font-bold">المصدر والملف</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm">
+              <span className="mb-1 block text-ink-2">معرّف المصدر الثابت *</span>
+              <input className={input} dir="ltr" value={sourceId} onChange={(e) => setSourceId(e.target.value.toLowerCase())} placeholder="admitad-store-x" />
+            </label>
+            <label className="text-sm">
               <span className="mb-1 block text-ink-2">اسم المصدر *</span>
               <input className={input} value={sourceName} onChange={(e) => setSourceName(e.target.value)} placeholder="مثال: Admitad — متجر س" />
             </label>
@@ -137,6 +161,15 @@ export default function ImportWorkbench() {
               <input className={input} value={network} onChange={(e) => setNetwork(e.target.value)} placeholder="Admitad / ArabClicks ..." />
             </label>
             <label className="text-sm">
+              <span className="mb-1 block text-ink-2">متجر الملف (إن كان لمتجر واحد)</span>
+              <select className={input} value={storeId} onChange={(e) => setStoreId(e.target.value)}>
+                <option value="">من الملف نفسه</option>
+                {STORE_REGISTRY.map((st) => (
+                  <option key={st.id} value={st.id}>{st.nameAr} ({st.id})</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
               <span className="mb-1 block text-ink-2">اسم المتجر إن لم يكن في الملف</span>
               <input className={input} value={defaultStore} onChange={(e) => setDefaultStore(e.target.value)} placeholder="اتركه فارغًا إن كان الملف يذكر المتجر" />
             </label>
@@ -145,6 +178,14 @@ export default function ImportWorkbench() {
               <select className={input} value={defaultCurrency} onChange={(e) => setDefaultCurrency(e.target.value)}>
                 <option value="">لا تفترض — ارفض الصف</option>
                 <option value="SAR">ريال سعودي (SAR)</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-ink-2">المنطقة الزمنية للتواريخ بلا منطقة</span>
+              <select className={input} value={timeZone} onChange={(e) => setTimeZone(e.target.value)}>
+                <option value="">غير محددة — تجاهل هذه التواريخ</option>
+                <option value="Asia/Riyadh">Asia/Riyadh (+03:00)</option>
+                <option value="UTC">UTC</option>
               </select>
             </label>
             <label className="text-sm">
@@ -163,7 +204,7 @@ export default function ImportWorkbench() {
             <FileUp size={24} className="text-brand-soft" aria-hidden />
             <span className="font-medium">{file ? file.name : "اختر ملف CSV أو XML"}</span>
             <span className="text-xs text-ink-3">
-              {file ? `${formatNumber(file.size / 1024)} كيلوبايت` : "حتى 15 ميغابايت — يُقرأ في المتصفح فقط"}
+              {file ? `${formatNumber(file.size / 1024)} كيلوبايت` : `حتى ${DEFAULT_LIMITS.maxBytes / 1024 / 1024} ميغابايت و ${formatNumber(DEFAULT_LIMITS.maxRows)} صف — يُقرأ في المتصفح فقط`}
             </span>
             <input
               type="file"
@@ -203,10 +244,10 @@ export default function ImportWorkbench() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-bold">ملخص القراءة</h2>
                 <span className="text-xs text-ink-3">
-                  الصيغة: <strong className="text-ink">{FORMAT_LABEL[result.format]}</strong> · {result.fileName}
+                  الصيغة: <strong className="text-ink">{result.format ? FORMAT_LABEL[result.format] : "—"}</strong> · {result.fileName} · {formatNumber(result.durationMs)}ms
                 </span>
               </div>
-              <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+              <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                 {[
                   ["صفوف الملف", result.totalRows],
                   ["مقبولة", result.summary.accepted],
@@ -215,6 +256,8 @@ export default function ImportWorkbench() {
                   ["مطابقة مؤكدة", result.summary.matched],
                   ["تحتاج مراجعة", result.summary.needsReview],
                   ["غير موجودة", result.summary.unmatched],
+                  ["متجر يحتاج مراجعة", result.summary.storePending],
+                  ["عملة أجنبية غير محولة", result.summary.foreignCurrency],
                   ["جديد / مستعمل / مجدد", `${result.summary.new} / ${result.summary.used} / ${result.summary.refurbished}`],
                 ].map(([label, value]) => (
                   <div key={label as string} className="rounded-xl border border-line bg-surface-2 p-3">
@@ -223,6 +266,16 @@ export default function ImportWorkbench() {
                   </div>
                 ))}
               </dl>
+
+              {lastApply && (
+                <div className="mt-4 rounded-xl border border-mint/40 bg-mint-50 p-3 text-xs leading-6 text-ink-2">
+                  <strong className="text-ink">محاكاة سجل الأسعار (هذه الجلسة فقط): </strong>
+                  {lastApply.duplicateFile
+                    ? "هذا الملف نفسه سبق استيراده — لم يتغير شيء."
+                    : `حالات سعر جديدة ${lastApply.newObservations} · تغيّر سعر ${lastApply.priceChanges} · تغيّر توفر ${lastApply.availabilityChanges} · تغيّر رابط ${lastApply.urlChanges} · نفس السعر (تحديث آخر ظهور) ${lastApply.refreshed} · أقدم مما لدينا ${lastApply.staleIgnored} · متجر بانتظار المراجعة ${lastApply.skippedPendingStore}`}
+                  <div className="text-ink-3">إجمالي السجل: {history.observations.length} حالة سعر · {history.events.length} حدث</div>
+                </div>
+              )}
 
               <details className="mt-4 rounded-xl border border-line">
                 <summary className="flex min-h-10 items-center px-3 text-sm text-ink-2">الأعمدة التي تم التعرف عليها</summary>
@@ -243,6 +296,7 @@ export default function ImportWorkbench() {
                     [
                       ["preview", `معاينة البيانات (${result.accepted.length})`],
                       ["review", `قائمة المراجعة (${reviewRows.length})`],
+                      ["stores", `متاجر تحتاج اعتمادًا (${result.storeProposals.length})`],
                       ["rejected", `المرفوضة (${result.rejected.length})`],
                       ["warnings", `التحذيرات (${result.warnings.length})`],
                     ] as [Tab, string][]
@@ -279,15 +333,23 @@ export default function ImportWorkbench() {
                             <a href={offer.url} target="_blank" rel="noopener noreferrer" className="line-clamp-2 hover:text-brand-soft">{offer.name}</a>
                             {offer.brand && <div className="text-xs text-ink-3">{offer.brand}</div>}
                           </td>
-                          <td className="px-3 py-2">{offer.store}</td>
+                          <td className="px-3 py-2">
+                            {offer.storeName}
+                            <div className="text-xs">{offer.storeId ? <span className="font-mono text-ink-3" dir="ltr">{offer.storeId}</span> : <span className="text-warn">بانتظار الاعتماد</span>}</div>
+                            {offer.sellerName && <div className="text-xs text-ink-3">البائع: {offer.sellerName}</div>}
+                          </td>
                           <td className="num whitespace-nowrap px-3 py-2 font-semibold">
-                            {formatNumber(offer.price)} ريال
-                            {offer.listPrice && <div className="text-xs font-normal text-ink-3 line-through">{formatNumber(offer.listPrice)}</div>}
+                            {money(offer.price)}
+                            {offer.listPrice && <div className="text-xs font-normal text-ink-3 line-through">{money(offer.listPrice)}</div>}
+                            {offer.sarPrice === null && <div className="text-xs font-normal text-warn">غير محوّل</div>}
                           </td>
                           <td className="px-3 py-2">{CONDITION_LABEL[offer.condition]}</td>
                           <td className="px-3 py-2">{AVAILABILITY_LABEL[offer.availability]}</td>
                           <td className="px-3 py-2 font-mono text-xs" dir="ltr">{offer.gtin ?? "—"}<br />{offer.mpn ?? "—"}</td>
-                          <td className="num px-3 py-2 text-xs" dir="ltr">{offer.sourceUpdatedAt?.slice(0, 16).replace("T", " ") ?? "غير مذكور"}</td>
+                          <td className="num px-3 py-2 text-xs" dir="ltr">
+                            {offer.sourceUpdatedAt ? `${offer.sourceUpdatedAt.utc.slice(0, 16).replace("T", " ")} UTC` : "غير مذكور"}
+                            {offer.sourceUpdatedAt && <div className="text-ink-3">{offer.sourceUpdatedAt.originalOffset}{offer.sourceUpdatedAt.assumedTimeZone ? ` (${offer.sourceUpdatedAt.assumedTimeZone})` : ""}</div>}
+                          </td>
                           <td className="px-3 py-2"><MatchBadge match={match} /></td>
                           <td className="px-3 py-2"><Badge tone="warn">غير موثق</Badge></td>
                         </tr>
@@ -304,7 +366,7 @@ export default function ImportWorkbench() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <span className="num text-ink-3">صف {offer.row} · </span>
-                            <strong>{offer.name}</strong> <span className="text-ink-3">— {offer.store}</span>
+                            <strong>{offer.name}</strong> <span className="text-ink-3">— {offer.storeName}</span>
                           </div>
                           <MatchBadge match={match} />
                         </div>
@@ -322,6 +384,25 @@ export default function ImportWorkbench() {
                         )}
                       </li>
                     ))}
+                  </ul>
+                )}
+
+                {tab === "stores" && (
+                  <ul className="divide-y divide-line">
+                    {result.storeProposals.length === 0 && <li className="p-6 text-center text-sm text-ink-3">كل المتاجر معروفة.</li>}
+                    {result.storeProposals.map((p) => (
+                      <li key={p.normalized + p.reason} className="p-4 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <strong>{p.rawName || "بدون اسم"}</strong>
+                          {p.suggestedStoreId ? <Badge tone="brand">مقترح: {p.suggestedStoreId}</Badge> : <Badge>لا يوجد اقتراح</Badge>}
+                        </div>
+                        <p className="mt-1 text-xs text-ink-2">{p.reason}</p>
+                        <p className="num mt-1 text-xs text-ink-3">الصفوف: {p.rows.slice(0, 15).join("، ")}{p.rows.length > 15 ? " ..." : ""}</p>
+                      </li>
+                    ))}
+                    <li className="p-4 text-xs text-ink-3">
+                      اعتماد اسم بديل أو إضافة متجر جديد يحتاج التخزين الدائم ونظام الدخول؛ حتى ذلك الحين لا تدخل هذه العروض سجل الأسعار ولا التقييم.
+                    </li>
                   </ul>
                 )}
 
@@ -376,7 +457,7 @@ export default function ImportWorkbench() {
                     <Badge tone="coral">خطأ: {l.error.slice(0, 60)}</Badge>
                   ) : (
                     <span className="num text-xs text-ink-2">
-                      {FORMAT_LABEL[l.format]} · مقبولة {l.summary.accepted} · مرفوضة {l.summary.rejected} · مراجعة {l.summary.needsReview}
+                      {l.format ? FORMAT_LABEL[l.format] : ""} · مقبولة {l.summary?.accepted ?? 0} · مرفوضة {l.summary?.rejected ?? 0} · مراجعة {l.summary?.needsReview ?? 0}
                     </span>
                   )}
                   <span className="num text-xs text-ink-3" dir="ltr">{l.at.slice(11, 19)}</span>
