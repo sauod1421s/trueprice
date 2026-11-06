@@ -39,7 +39,7 @@ export default function CarsPage() {
             </span>
           </div>
           <h1 className="text-[1.9rem] font-bold leading-tight sm:text-4xl">
-            مرجع أسعار السيارات
+            مرجع أسعار <span className="text-gradient">السيارات</span>
           </h1>
           <p className="mt-3 max-w-2xl leading-8 text-ink-2">
             استعرض أسعار السيارات الجديدة في السعودية، وتعرّف على الموديلات

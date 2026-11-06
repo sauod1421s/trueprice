@@ -57,7 +57,7 @@ export default function SearchClient({
           <Boxes3D className="float-slow w-full" />
         </div>
         <div className="container-page relative py-8 sm:py-12">
-          <h1 className="text-2xl font-bold sm:text-3xl">البحث في TruePrice</h1>
+          <h1 className="text-[1.75rem] font-bold sm:text-4xl">البحث في <span className="text-gradient" dir="ltr">TruePrice</span></h1>
           <p className="mt-1 text-ink-2">ابحث عن أي جهاز أو شركة أو فئة</p>
 
           <form
