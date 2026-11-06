@@ -19,6 +19,7 @@ import {
 
 import brands, { type CarModel } from "@/app/data/cars";
 import { Badge, BrandMonogram, Price, TrustNote } from "@/app/components/ui";
+import { Car3D, CarKey3D } from "@/app/components/illustrations";
 import { brandInitial, brandNameAr, brandSummaries } from "@/app/lib/carBrands";
 import { TRUST_TEXT } from "@/app/lib/trust";
 
@@ -108,7 +109,7 @@ export default async function Page({
   return (
     <main>
       {/* ================= BRAND SWITCHER ================= */}
-      <nav aria-label="العلامات التجارية" className="border-b border-line bg-surface/40">
+      <nav aria-label="العلامات التجارية" className="border-b border-line bg-surface">
         <div className="container-page">
           <div className="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0">
             <ul className="flex gap-1.5 py-2.5">
@@ -129,7 +130,7 @@ export default async function Page({
                       aria-current={active ? "page" : undefined}
                       className={`inline-flex h-9 items-center rounded-full border px-3 text-sm transition-colors ${
                         active
-                          ? "border-brand/50 bg-brand/15 font-semibold text-brand-soft"
+                          ? "border-brand bg-brand font-semibold text-on-brand"
                           : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink"
                       }`}
                     >
@@ -160,9 +161,16 @@ export default async function Page({
         </ol>
 
         {/* ================= HERO ================= */}
-        <section className="card flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-          <div className="flex min-w-0 items-center gap-4">
-            <BrandMonogram label={brandInitial(brand.name)} className="size-14 rounded-xl text-lg" />
+        <section className="theme-forest bg-hero relative flex flex-col gap-5 overflow-hidden rounded-[1.75rem] p-5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div className="bg-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-3 left-[30%] hidden w-56 lg:block" aria-hidden>
+            <Car3D className="float-slow w-full" />
+          </div>
+          <div className="pointer-events-none absolute left-[22%] top-3 hidden w-14 lg:block" aria-hidden>
+            <CarKey3D className="float w-full" />
+          </div>
+          <div className="relative flex min-w-0 items-center gap-4">
+            <BrandMonogram label={brandInitial(brand.name)} toneKey={brandId} className="size-16 rounded-2xl text-lg" />
             <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Badge tone="warn">
@@ -180,12 +188,12 @@ export default async function Page({
             </div>
           </div>
 
-          <dl className="flex shrink-0 gap-6 border-t border-line pt-4 sm:border-0 sm:pt-0">
-            <div>
+          <dl className="relative flex shrink-0 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2.5">
               <dt className="text-xs text-ink-3">عدد الموديلات</dt>
-              <dd className="num text-2xl font-bold">{brand.models.length}</dd>
+              <dd className="num text-2xl font-bold text-mint">{brand.models.length}</dd>
             </div>
-            <div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2.5">
               <dt className="text-xs text-ink-3">المصدر المذكور</dt>
               <dd className="mt-1 text-sm font-medium text-ink-2">{brand.sourceName}</dd>
             </div>
@@ -209,9 +217,9 @@ export default async function Page({
         </section>
 
         {/* ================= REFERENCES ================= */}
-        <section className="card mt-8 p-5 sm:p-6">
+        <section className="card bg-cream-wash mt-8 p-5 sm:p-6">
           <h2 className="flex items-center gap-2 font-semibold">
-            <Database size={18} className="text-brand-soft" aria-hidden />
+            <span className="grid size-8 place-items-center rounded-lg bg-mint-50 text-brand-soft" aria-hidden><Database size={16} /></span>
             المراجع
           </h2>
           <p className="mt-1 text-sm text-ink-3">
@@ -241,7 +249,17 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
   const fair = getFairPrice(car);
 
   return (
-    <article className="card flex h-full flex-col">
+    <article className="card card-hover relative flex h-full flex-col overflow-hidden">
+      <span
+        aria-hidden
+        className={`absolute inset-x-0 top-0 h-1 ${
+          fair.fairPrice !== null
+            ? "bg-gradient-to-l from-mint to-[#1f9e69]"
+            : fair.status === "not-independent"
+            ? "bg-yellow"
+            : "bg-line"
+        }`}
+      />
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold leading-snug" dir="ltr" style={{ textAlign: "right" }}>
@@ -332,9 +350,9 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
 function FairPill({ fair }: { fair: FairPriceResult }) {
   if (fair.fairPrice !== null) {
     return (
-      <div className="shrink-0 rounded-lg border border-brand/25 bg-brand/10 px-2.5 py-1.5 text-left">
-        <div className="text-[0.65rem] text-brand-soft/80">السعر العادل</div>
-        <Price value={fair.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/70 text-[0.7em]" />
+      <div className="shrink-0 rounded-xl border border-mint/50 bg-mint-50 px-2.5 py-1.5 text-left">
+        <div className="text-[0.65rem] text-brand-soft">السعر العادل</div>
+        <Price value={fair.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/80 text-[0.7em]" />
       </div>
     );
   }
@@ -350,7 +368,7 @@ function FairDetails({ fair }: { fair: FairPriceResult }) {
   return (
     <div
       className={`rounded-lg border p-3 text-sm ${
-        fair.fairPrice !== null ? "border-brand/25 bg-brand/[0.06]" : "border-line bg-surface-2"
+        fair.fairPrice !== null ? "border-mint/40 bg-mint-50" : "border-line bg-surface-2"
       }`}
     >
       <div className="flex items-center gap-1.5 font-semibold">
@@ -360,7 +378,7 @@ function FairDetails({ fair }: { fair: FairPriceResult }) {
       {fair.fairPrice !== null ? (
         <>
           <div className="mt-1 text-xl font-bold text-brand-soft">
-            <Price value={fair.fairPrice} unitClassName="text-brand-soft/70 text-[0.7em]" />
+            <Price value={fair.fairPrice} unitClassName="text-brand-soft/80 text-[0.7em]" />
           </div>
           <div className="mt-1 font-medium">
             {getFairPriceIcon(fair.status)} {getFairPriceLabel(fair.status)}
@@ -424,7 +442,7 @@ function ReferenceLink({
       rel="noopener noreferrer"
       className={`flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
         primary
-          ? "border-brand/30 bg-brand/10 text-brand-soft hover:bg-brand/15"
+          ? "border-mint/50 bg-mint-50 text-brand-soft hover:bg-mint-soft/60"
           : "border-line bg-surface-2 text-ink-2 hover:border-line-strong hover:text-ink"
       }`}
     >

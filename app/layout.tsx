@@ -7,6 +7,7 @@ import "@fontsource/ibm-plex-sans-arabic/700.css";
 import "./globals.css";
 import SiteFooter from "./components/SiteFooter";
 import SiteHeader from "./components/SiteHeader";
+import { IllustrationDefs } from "./components/illustrations";
 import { SITE_URL } from "./lib/site";
 
 const geistSans = Geist({
@@ -20,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#070b12",
-  colorScheme: "dark",
+  themeColor: "#0c2e23",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
@@ -71,6 +72,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <IllustrationDefs />
         <SiteHeader />
         <div className="flex-1">{children}</div>
 

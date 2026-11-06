@@ -16,16 +16,18 @@ export default function HomeSearch() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl lg:mx-0">
       <form
         role="search"
         onSubmit={(e) => {
           e.preventDefault();
           go(search);
         }}
-        className="flex items-center gap-2 rounded-2xl border border-line-strong bg-surface p-1.5 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.8)] transition-colors focus-within:border-brand/60"
+        className="theme-light flex items-center gap-2 rounded-2xl border border-white/40 bg-surface p-1.5 shadow-[0_24px_50px_-18px_rgb(0_0_0/0.55)] transition-shadow focus-within:shadow-[0_0_0_4px_rgb(61_220_151/0.45),0_24px_50px_-18px_rgb(0_0_0/0.55)]"
       >
-        <Search size={20} className="ms-3 shrink-0 text-ink-3" aria-hidden />
+        <span className="ms-1 grid size-10 shrink-0 place-items-center rounded-xl bg-mint-50 text-brand-soft" aria-hidden>
+          <Search size={19} />
+        </span>
         <input
           type="search"
           value={search}
@@ -37,20 +39,20 @@ export default function HomeSearch() {
         />
         <button
           type="submit"
-          className="h-12 shrink-0 rounded-xl bg-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-strong sm:px-7"
+          className="h-12 shrink-0 rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong sm:px-7"
         >
           بحث
         </button>
       </form>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm lg:justify-start">
         <span className="text-ink-3">أمثلة:</span>
         {popularProducts.slice(0, 4).map((product) => (
           <button
             key={product}
             type="button"
             onClick={() => go(product)}
-            className="min-h-9 rounded-full border border-line bg-surface/70 px-3 text-ink-2 transition-colors hover:border-brand/40 hover:text-brand-soft"
+            className="min-h-9 rounded-full border border-white/15 bg-white/[0.07] px-3 text-ink-2 backdrop-blur transition-colors hover:border-mint/60 hover:bg-white/[0.12] hover:text-ink"
           >
             {product}
           </button>

@@ -28,7 +28,7 @@ export default function SiteHeader() {
   const open = openFor === pathname;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line/80 bg-bg/85 backdrop-blur-md supports-[backdrop-filter]:bg-bg/70">
+    <header className="theme-forest sticky top-0 z-40 border-b border-white/[0.06] bg-bg shadow-[0_8px_24px_-16px_rgb(0_0_0/0.5)]">
       <div className="container-page flex h-16 items-center justify-between gap-4">
         <Logo />
 
@@ -43,8 +43,8 @@ export default function SiteHeader() {
                     aria-current={active ? "page" : undefined}
                     className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       active
-                        ? "bg-surface-2 text-ink"
-                        : "text-ink-2 hover:bg-surface hover:text-ink"
+                        ? "bg-white/10 text-ink shadow-[inset_0_-2px_0_var(--color-mint)]"
+                        : "text-ink-2 hover:bg-white/[0.06] hover:text-ink"
                     }`}
                   >
                     {item.label}
@@ -58,7 +58,7 @@ export default function SiteHeader() {
         <div className="flex items-center gap-2">
           <Link
             href="/search"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:border-brand/50 sm:px-4"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand shadow-[0_6px_16px_-6px_rgb(61_220_151/0.6)] transition-colors hover:bg-brand-strong sm:px-4"
           >
             <Search size={17} aria-hidden />
             <span>بحث</span>
@@ -66,7 +66,7 @@ export default function SiteHeader() {
 
           <button
             type="button"
-            className="grid size-10 place-items-center rounded-lg border border-line-strong bg-surface text-ink md:hidden"
+            className="grid size-10 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-ink md:hidden"
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "إغلاق القائمة" : "فتح القائمة"}
@@ -93,7 +93,7 @@ export default function SiteHeader() {
                     onClick={() => setOpenFor(null)}
                     aria-current={active ? "page" : undefined}
                     className={`flex min-h-12 items-center rounded-lg px-3 text-base font-medium ${
-                      active ? "bg-surface-2 text-ink" : "text-ink-2"
+                      active ? "bg-white/10 text-ink" : "text-ink-2"
                     }`}
                   >
                     {item.label}

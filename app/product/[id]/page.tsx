@@ -23,6 +23,7 @@ import {
   ProductVisual,
   TrustNote,
 } from "../../components/ui";
+import { Scale3D } from "../../components/illustrations";
 
 type PageOffer = {
   store: string;
@@ -202,11 +203,11 @@ export default async function ProductPage({ params }: PageProps) {
           {/* ============ العمود الرئيسي ============ */}
           <div className="min-w-0 space-y-5">
             {/* العنوان */}
-            <section className="card flex gap-4 p-5 sm:p-6">
+            <section className="card relative flex gap-4 overflow-hidden p-4 sm:gap-6 sm:p-6">
+              <div aria-hidden className="pointer-events-none absolute -left-16 -top-16 size-48 rounded-full bg-mint/15 blur-2xl" />
               <ProductVisual
                 category={product.category}
-                className="size-20 shrink-0 sm:size-28"
-                size={40}
+                className="relative size-24 shrink-0 sm:size-40"
               />
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-ink-3">
@@ -252,7 +253,7 @@ export default async function ProductPage({ params }: PageProps) {
                       key={`${offer.store}-${index}`}
                       className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border p-3 sm:p-4 ${
                         rank === 0
-                          ? "border-brand/30 bg-brand/[0.05]"
+                          ? "border-mint/60 bg-mint-50"
                           : "border-line bg-surface-2"
                       }`}
                     >
@@ -262,7 +263,7 @@ export default async function ProductPage({ params }: PageProps) {
                             {offer.storeAr || offer.store}
                           </span>
                           {rank === 0 && offer.price !== null && (
-                            <Badge tone="brand">الأقل سعرًا</Badge>
+                            <Badge tone="good">الأقل سعرًا</Badge>
                           )}
                         </div>
                         <div className="mt-0.5 text-xs text-ink-3">
@@ -288,7 +289,11 @@ export default async function ProductPage({ params }: PageProps) {
                           href={offer.url}
                           target="_blank"
                           rel="noopener noreferrer sponsored"
-                          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-surface-3 px-4 text-sm font-semibold text-ink transition-colors hover:bg-brand hover:text-white sm:w-auto"
+                          className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold transition-colors sm:w-auto ${
+                            rank === 0
+                              ? "bg-brand text-on-brand hover:bg-brand-strong"
+                              : "border border-line-strong bg-surface text-brand-soft hover:border-brand hover:bg-brand hover:text-on-brand"
+                          }`}
                         >
                           الانتقال للمتجر
                           <ExternalLink size={14} aria-hidden />
@@ -347,7 +352,7 @@ export default async function ProductPage({ params }: PageProps) {
                 href={product.amazonUrl}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand px-5 font-semibold text-white transition-colors hover:bg-brand-strong"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand px-5 font-semibold text-on-brand transition-colors hover:bg-brand-strong"
               >
                 البحث عن المنتج في Amazon
                 <ExternalLink size={16} aria-hidden />
@@ -385,10 +390,11 @@ export default async function ProductPage({ params }: PageProps) {
     if (!product) return null;
     return (
       <>
-        <section className="card overflow-hidden">
-          <div className="p-5">
+        <section className="theme-forest bg-hero relative overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-card)]">
+          <div className="bg-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+          <div className="relative p-5">
             <div className="text-sm text-ink-3">أقل سعر مرجعي</div>
-            <div className="mt-1 text-3xl font-bold text-brand-soft">
+            <div className="mt-1 text-3xl font-bold text-mint">
               {product.price !== null ? (
                 <Price value={product.price} unitClassName="text-ink-3 text-[0.55em] font-medium" />
               ) : (
@@ -402,7 +408,7 @@ export default async function ProductPage({ params }: PageProps) {
             )}
           </div>
 
-          <dl className="grid grid-cols-3 gap-px border-t border-line bg-line text-center">
+          <dl className="relative grid grid-cols-3 gap-px border-t border-line bg-line text-center">
             <PriceStat title="أقل سعر" value={product.lowestPrice} />
             <PriceStat title="متوسط السوق" value={product.averagePrice} />
             <PriceStat title="أعلى سعر" value={product.highestPrice} />
@@ -416,12 +422,15 @@ export default async function ProductPage({ params }: PageProps) {
           }`}
         >
           <div className="text-sm font-semibold text-ink-2">⭐ السعر العادل</div>
-          <div
-            className={`mt-1 font-bold ${
-              fairPrice !== null ? "text-2xl" : "text-lg text-ink-3"
-            } ${saving ? verdictStyle(saving).text : ""}`}
-          >
-            {fairPrice !== null ? <Price value={fairPrice} /> : "مخفي مؤقتًا"}
+          <div className="flex items-center justify-between gap-3">
+            <div
+              className={`mt-1 font-bold ${
+                fairPrice !== null ? "text-2xl" : "text-lg text-ink-3"
+              } ${saving ? verdictStyle(saving).text : ""}`}
+            >
+              {fairPrice !== null ? <Price value={fairPrice} /> : "مخفي مؤقتًا"}
+            </div>
+            {fairPrice === null && <Scale3D className="size-16 shrink-0 opacity-90" />}
           </div>
 
           <div className="mt-3 text-sm leading-7">
@@ -461,7 +470,7 @@ export default async function ProductPage({ params }: PageProps) {
                   ? `أقل سعر معروض أقل من السعر العادل بنسبة ${saving.percent.toFixed(1)}%`
                   : "أقل سعر معروض ليس أقل من السعر العادل"
               }
-              tone="brand"
+              tone="good"
               wide
             />
           )}
@@ -471,7 +480,7 @@ export default async function ProductPage({ params }: PageProps) {
             title="حالة البيانات"
             value={hasUnverified ? TRUST_TEXT.unverified : "موثقة"}
             note={hasUnverified ? TRUST_TEXT.manualEntry : undefined}
-            tone={hasUnverified ? "warn" : "brand"}
+            tone={hasUnverified ? "warn" : "good"}
           />
 
           <InfoBox
@@ -514,8 +523,8 @@ function verdictStyle(saving: Saving) {
     case "below-fair":
       return {
         label: "✅ أقل من السعر العادل",
-        text: "text-brand-soft",
-        box: "border-brand/30 bg-brand/[0.07]",
+        text: "text-good-soft",
+        box: "border-mint/50 bg-mint-50",
       };
     case "at-fair":
       return {
@@ -536,7 +545,7 @@ function OfferSaving({ saving }: { saving: Saving | null }) {
   if (!saving || saving.amount <= 0) return null;
 
   return (
-    <div className="text-xs font-semibold text-brand-soft">
+    <div className="text-xs font-semibold text-good-soft">
       توفير {Math.round(saving.amount).toLocaleString("en-US")} ريال عن السعر
       العادل
     </div>
@@ -576,12 +585,13 @@ function InfoBox({
   value: string;
   note?: string;
   icon?: React.ReactNode;
-  tone?: "neutral" | "brand" | "warn";
+  tone?: "neutral" | "brand" | "good" | "warn";
   wide?: boolean;
 }) {
   const valueColor = {
     neutral: "text-ink",
     brand: "text-brand-soft",
+    good: "text-good-soft",
     warn: "text-warn",
   }[tone];
 

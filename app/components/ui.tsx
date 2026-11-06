@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { CategoryArt } from "./illustrations";
 
 /* =========================================================
    تنسيق الأسعار — أرقام لاتينية بعرض ثابت + "ريال"
@@ -68,7 +69,6 @@ export function CategoryIcon({
 export function ProductVisual({
   category,
   className = "",
-  size = 34,
 }: {
   category: string;
   className?: string;
@@ -76,11 +76,11 @@ export function ProductVisual({
 }) {
   return (
     <div
-      className={`relative grid place-items-center overflow-hidden rounded-xl border border-line bg-gradient-to-b from-surface-3 to-surface-2 text-brand-soft ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-line bg-gradient-to-b from-surface-2 to-surface ${className}`}
       aria-hidden
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-l from-transparent via-brand/40 to-transparent" />
-      <CategoryIcon category={category} size={size} />
+      <div className="bg-dots-dark absolute inset-0 opacity-60" />
+      <CategoryArt category={category} className="relative size-full p-[8%]" />
     </div>
   );
 }
@@ -95,12 +95,14 @@ export function Badge({
   className = "",
 }: {
   children: ReactNode;
-  tone?: "neutral" | "brand" | "warn";
+  tone?: "neutral" | "brand" | "good" | "coral" | "warn";
   className?: string;
 }) {
   const tones = {
-    neutral: "border-line-strong bg-surface-2 text-ink-2",
-    brand: "border-brand/30 bg-brand/10 text-brand-soft",
+    neutral: "border-line bg-surface-2 text-ink-2",
+    brand: "border-mint/40 bg-mint-50 text-brand-soft",
+    good: "border-mint/50 bg-mint-50 text-good-soft",
+    coral: "border-coral/30 bg-coral-50 text-coral-ink",
     warn: "border-warn-line bg-warn-bg text-warn",
   } as const;
 
@@ -125,12 +127,14 @@ export function TrustNote({
   return (
     <div
       role="note"
-      className={`flex gap-3 rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-6 text-warn/90 ${className}`}
+      className={`flex gap-3 rounded-2xl border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-6 text-warn ${className}`}
     >
-      <TriangleAlert size={18} className="mt-0.5 shrink-0 text-warn" aria-hidden />
+      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-yellow text-[#5c3d00]" aria-hidden>
+        <TriangleAlert size={15} />
+      </span>
       <div>
         {title && <p className="font-semibold text-warn">{title}</p>}
-        {children && <div className="text-warn/80">{children}</div>}
+        {children && <div className="text-warn/90">{children}</div>}
       </div>
     </div>
   );
@@ -156,7 +160,12 @@ export function SectionHeading({
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
+        {eyebrow && (
+          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-mint/40 bg-mint-50 px-3 py-1 text-xs font-semibold text-brand-soft">
+            <span className="size-1.5 rounded-full bg-coral" aria-hidden />
+            {eyebrow}
+          </div>
+        )}
         <Tag
           className={
             Tag === "h1"
@@ -177,21 +186,39 @@ export function SectionHeading({
   );
 }
 
+const MONOGRAM_TONES = [
+  "from-mint-soft to-mint text-forest",
+  "from-yellow-50 to-yellow text-[#5c3d00]",
+  "from-coral-50 to-coral/70 text-[#7a2614]",
+  "from-cream to-[#f2dfb8] text-forest",
+];
+
+/** لون ثابت لكل علامة (من اسمها) حتى تبقى البطاقات متنوعة ومتناسقة */
+export function toneFor(key: string): number {
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % MONOGRAM_TONES.length;
+}
+
 export function BrandMonogram({
   label,
   className = "",
+  toneKey,
 }: {
   label: string;
   className?: string;
+  toneKey?: string;
 }) {
+  const tone = MONOGRAM_TONES[toneFor(toneKey ?? label)];
   return (
     <span
       aria-hidden
-      className={`grid shrink-0 place-items-center rounded-lg border border-brand/20 bg-brand/10 font-bold text-brand-soft ${
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br font-bold shadow-[inset_0_-3px_0_rgb(0_0_0/0.08),0_6px_14px_-8px_rgb(18_38_30/0.45)] ${tone} ${
         label.length > 1 ? "text-xs" : "text-base"
       } ${className}`}
     >
-      {label}
+      <span className="absolute inset-x-1 top-0.5 h-1/3 rounded-full bg-white/45 blur-[2px]" />
+      <span className="relative">{label}</span>
     </span>
   );
 }

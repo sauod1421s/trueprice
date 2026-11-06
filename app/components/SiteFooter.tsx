@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Coins3D, PriceTag3D } from "./illustrations";
 import { LogoMark } from "./Logo";
 
 const LINKS = [
@@ -22,8 +23,15 @@ const LINKS = [
 
 export default function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-line bg-surface/40">
-      <div className="container-page py-10 sm:py-12">
+    <footer className="theme-forest bg-hero relative mt-auto overflow-hidden">
+      <div className="bg-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+      <div className="pointer-events-none absolute left-10 top-10 hidden w-24 opacity-90 lg:block" aria-hidden>
+        <PriceTag3D className="float-slow w-full" />
+      </div>
+      <div className="pointer-events-none absolute left-40 top-24 hidden w-16 opacity-80 lg:block" aria-hidden>
+        <Coins3D className="float w-full" />
+      </div>
+      <div className="container-page relative py-10 sm:py-12">
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-[2fr_1fr_1fr]">
           <div className="col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2.5">
@@ -47,7 +55,7 @@ export default function SiteFooter() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className="inline-flex min-h-9 items-center text-sm text-ink-2 transition-colors hover:text-brand-soft"
+                      className="inline-flex min-h-9 items-center text-sm text-ink-2 transition-colors hover:text-mint"
                     >
                       {item.label}
                     </Link>
@@ -63,7 +71,7 @@ export default function SiteFooter() {
           ))}
         </div>
 
-        <details className="group mt-10 rounded-xl border border-line bg-surface/60 open:bg-surface">
+        <details className="group mt-10 rounded-2xl border border-white/10 bg-white/[0.04] open:bg-white/[0.07]">
           <summary className="flex min-h-12 items-center justify-between gap-3 px-4 text-sm font-semibold text-ink">
             تنبيه وإخلاء مسؤولية
             <span className="text-ink-3 transition-transform group-open:rotate-180" aria-hidden>
@@ -97,7 +105,7 @@ export default function SiteFooter() {
           </div>
         </details>
 
-        <div className="mt-8 flex flex-col gap-2 border-t border-line pt-6 text-xs text-ink-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-ink-3 sm:flex-row sm:items-center sm:justify-between">
           <span dir="ltr" className="text-right sm:text-left">
             © {new Date().getFullYear()} TruePrice
           </span>
