@@ -31,4 +31,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # حزم الإنتاج: يفشل عند أي ثغرة عالية أو حرجة
       - run: npm audit --omit=dev --audit-level=high
+      # كل الحزم بما فيها أدوات التطوير: يفشل عند ثغرة عالية أو حرجة
+      - run: npm audit --audit-level=high
+      # تقرير كامل بكل المستويات (للعرض فقط)
+      - run: npm audit || true
