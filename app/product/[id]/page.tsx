@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import products from "../../data/products";
-import { priceSpread } from "../../lib/pricing";
+import {
+  computeSaving,
+  electronicsFairPrice,
+  fairPriceUnavailableReason,
+  type Saving,
+} from "../../lib/valuation/electronics";
+import type { VerificationStatus } from "../../lib/trust";
 import { describeEntryDate, TRUST_TEXT } from "../../lib/trust";
 
 type PageOffer = {
@@ -13,6 +19,7 @@ type PageOffer = {
   available?: boolean;
   verified?: boolean;
   isVerified?: boolean;
+  verificationStatus?: VerificationStatus;
   checkedAt?: string | null;
 };
 
@@ -101,17 +108,22 @@ export default async function ProductPage({ params }: PageProps) {
   }
 
   /*
-   * التوفير = أعلى سعر مرجعي − أقل سعر مرجعي.
-   * (الحساب السابق: أقل سعر − السعر العادل، وكان دائمًا صفرًا
-   * لأن أقل سعر لا يمكن أن يتجاوز الوسيط.)
+   * السعر العادل يُحسب من الأسعار الموثقة فقط (محرك الإلكترونيات).
+   * حاليًا كل الأسعار غير موثقة، فيبقى مخفيًا حتى اعتماد مصادر موثوقة.
+   * الحقل product.fairPrice في البيانات محفوظ كما هو ولا يُعرض.
    */
-  const spread = priceSpread(product.offers.map((o) => o.price));
+  const valuation = electronicsFairPrice(product.offers);
+  const fairPrice = valuation.fairPrice;
 
   /*
-   * لا نصدر حكمًا "سعر مناسب / أعلى من العادل" لأن الأسعار غير
-   * موثقة، ولأن أقل سعر يقع دائمًا تحت الوسيط فالحكم كان مضللًا.
+   * التوفير = السعر العادل الموثوق − السعر المعروض (أقل سعر).
+   * لا يظهر إذا لم يتوفر سعر عادل موثوق.
    */
-  const hasFairEstimate = product.fairPrice !== null;
+  const saving = computeSaving(fairPrice, product.lowestPrice);
+
+  const hasUnverified = product.offers.some(
+    (o) => o.verificationStatus !== "verified"
+  );
 
   return (
     <main
@@ -160,6 +172,7 @@ export default async function ProductPage({ params }: PageProps) {
           }}
         >
           {/* تنبيه حالة البيانات */}
+          {hasUnverified && (
           <div
             role="note"
             style={{
@@ -180,6 +193,7 @@ export default async function ProductPage({ params }: PageProps) {
             <br />
             {TRUST_TEXT.verificationPending}
           </div>
+          )}
 
           {/* العنوان */}
           <div
@@ -321,9 +335,10 @@ export default async function ProductPage({ params }: PageProps) {
             style={{
               borderRadius: "18px",
               padding: "22px",
-              background:
-                "#f9fafb",
-              border: "1px solid #e5e7eb",
+              background: saving ? verdictStyle(saving).bg : "#f9fafb",
+              border: `1px solid ${
+                saving ? verdictStyle(saving).border : "#e5e7eb"
+              }`,
               marginBottom: "18px",
             }}
           >
@@ -345,19 +360,19 @@ export default async function ProductPage({ params }: PageProps) {
                     marginBottom: "7px",
                   }}
                 >
-                  ⭐ السعر العادل (تقدير أولي)
+                  ⭐ السعر العادل
                 </div>
 
                 <div
                   style={{
-                    fontSize: "clamp(28px, 5vw, 38px)",
+                    fontSize: fairPrice !== null ? "clamp(28px, 5vw, 38px)" : "20px",
                     fontWeight: "900",
-                    color: "#4b5563",
+                    color: saving ? verdictStyle(saving).color : "#6b7280",
                   }}
                 >
-                  {product.fairPrice !== null
-                    ? `${product.fairPrice.toLocaleString("en-US")} ريال`
-                    : "غير متوفر"}
+                  {fairPrice !== null
+                    ? `${fairPrice.toLocaleString("en-US")} ريال`
+                    : "مخفي مؤقتًا"}
                 </div>
               </div>
 
@@ -367,15 +382,27 @@ export default async function ProductPage({ params }: PageProps) {
                   fontSize: "16px",
                   lineHeight: "1.8",
                   color: "#374151",
+                  maxWidth: "560px",
                 }}
               >
-                <strong style={{ color: "#6b7280" }}>
-                  ℹ️ لا نصدر حكمًا على السعر حاليًا
-                </strong>
-                <br />
-                {hasFairEstimate
-                  ? `وسيط ${product.offers.length} أسعار مرجعية غير موثقة، وليس سعرًا معتمدًا.`
-                  : TRUST_TEXT.dataUnavailable}
+                {saving ? (
+                  <>
+                    <strong style={{ color: verdictStyle(saving).color }}>
+                      {verdictStyle(saving).label}
+                    </strong>
+                    <br />
+                    محسوب من أسعار موثقة لدى {valuation.verifiedStores} متاجر.
+                  </>
+                ) : (
+                  <>
+                    <strong style={{ color: "#6b7280" }}>
+                      ℹ️ {fairPriceUnavailableReason(valuation.status)}
+                    </strong>
+                    <br />
+                    سيظهر السعر العادل تلقائيًا بعد اعتماد أسعار من مصادر
+                    موثوقة.
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -389,28 +416,29 @@ export default async function ProductPage({ params }: PageProps) {
               gap: "14px",
             }}
           >
-            <InfoBox
-              title="💰 التوفير المحتمل"
-              value={
-                spread && spread.saving > 0
-                  ? `${spread.saving.toLocaleString("en-US")} ريال`
-                  : spread
-                  ? "الأسعار متساوية"
-                  : TRUST_TEXT.dataUnavailable
-              }
-              note={
-                spread && spread.saving > 0
-                  ? `الفرق بين أعلى وأقل سعر مرجعي (${spread.savingPercent.toFixed(1)}%)`
-                  : undefined
-              }
-              color="#16a34a"
-            />
+            {/* التوفير لا يظهر إلا مع سعر عادل موثوق */}
+            {saving && (
+              <InfoBox
+                title="💰 التوفير"
+                value={
+                  saving.amount > 0
+                    ? `${Math.round(saving.amount).toLocaleString("en-US")} ريال`
+                    : "لا يوجد"
+                }
+                note={
+                  saving.amount > 0
+                    ? `أقل سعر معروض أقل من السعر العادل بنسبة ${saving.percent.toFixed(1)}%`
+                    : "أقل سعر معروض ليس أقل من السعر العادل"
+                }
+                color="#16a34a"
+              />
+            )}
 
             <InfoBox
               title="🛡️ حالة البيانات"
-              value={TRUST_TEXT.unverified}
-              note={TRUST_TEXT.manualEntry}
-              color="#b45309"
+              value={hasUnverified ? TRUST_TEXT.unverified : "موثقة"}
+              note={hasUnverified ? TRUST_TEXT.manualEntry : undefined}
+              color={hasUnverified ? "#b45309" : "#15803d"}
             />
 
             <InfoBox
@@ -641,6 +669,8 @@ export default async function ProductPage({ params }: PageProps) {
                     {offer.price !== null
                       ? `${offer.price.toLocaleString("en-US")} ريال`
                       : "غير متوفر"}
+
+                    <OfferSaving saving={computeSaving(fairPrice, offer.price)} />
                   </div>
 
                   {offer.url && (
@@ -744,6 +774,54 @@ function getMainStore(product: ProductPageProduct): string {
   }
 
   return "غير محدد";
+}
+
+/* =========================
+   حكم السعر مقابل السعر العادل
+========================= */
+
+function verdictStyle(saving: Saving) {
+  switch (saving.verdict) {
+    case "below-fair":
+      return {
+        label: "✅ أقل من السعر العادل",
+        color: "#15803d",
+        bg: "#ecfdf5",
+        border: "#bbf7d0",
+      };
+    case "at-fair":
+      return {
+        label: "🟡 ضمن السعر العادل",
+        color: "#a16207",
+        bg: "#fefce8",
+        border: "#fde68a",
+      };
+    default:
+      return {
+        label: "⚠️ أعلى من السعر العادل",
+        color: "#c2410c",
+        bg: "#fff7ed",
+        border: "#fed7aa",
+      };
+  }
+}
+
+function OfferSaving({ saving }: { saving: Saving | null }) {
+  if (!saving || saving.amount <= 0) return null;
+
+  return (
+    <div
+      style={{
+        fontSize: "13px",
+        color: "#15803d",
+        fontWeight: 700,
+        marginTop: "4px",
+      }}
+    >
+      توفير {Math.round(saving.amount).toLocaleString("en-US")} ريال عن السعر
+      العادل
+    </div>
+  );
 }
 
 /* =========================

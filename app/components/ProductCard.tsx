@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import type { VerificationStatus } from "../lib/trust";
+import { electronicsFairPrice } from "../lib/valuation/electronics";
 
 type PriceOffer = {
   store: string;
@@ -8,6 +10,7 @@ type PriceOffer = {
   price: number;
   url: string;
   isVerified?: boolean;
+  verificationStatus?: VerificationStatus;
   checkedAt?: string;
 };
 
@@ -180,7 +183,7 @@ export default function ProductCard({
 
         <PriceBox
           title="السعر العادل"
-          value={product.fairPrice}
+          value={electronicsFairPrice(product.offers).fairPrice}
           highlight
         />
       </div>
@@ -358,7 +361,7 @@ function PriceBox({
   highlight = false,
 }: {
   title: string;
-  value: number;
+  value: number | null;
   highlight?: boolean;
 }) {
   return (
@@ -387,7 +390,9 @@ function PriceBox({
           fontSize: 15,
         }}
       >
-        {value.toLocaleString("ar-SA")} ر.س
+        {value !== null
+          ? `${value.toLocaleString("ar-SA")} ر.س`
+          : "مخفي حتى التحقق"}
       </strong>
     </div>
   );

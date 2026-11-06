@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import products from "../data/products";
 import { searchProducts } from "../lib/search";
 import { TRUST_TEXT } from "../lib/trust";
+import { electronicsFairPrice } from "../lib/valuation/electronics";
 
 export default function SearchClient({
   initialQuery = "",
@@ -218,7 +219,8 @@ export default function SearchClient({
               const lowestPrice = product.lowestPrice ?? 0;
               const highestPrice = product.highestPrice ?? 0;
               const averagePrice = product.averagePrice ?? 0;
-              const fairPrice = product.fairPrice;
+              // من الأسعار الموثقة فقط؛ مخفي ما دامت كل الأسعار غير موثقة
+              const fairPrice = electronicsFairPrice(product.offers).fairPrice;
 
               return (
                 <div
@@ -301,12 +303,12 @@ export default function SearchClient({
 
                     <div>
                       <small style={{ color: "#777" }}>
-                        السعر العادل (تقدير أولي)
+                        السعر العادل
                       </small>
                       <div style={{ fontWeight: "bold" }}>
                         {fairPrice !== null
                           ? `${fairPrice.toLocaleString("ar-SA")} ريال`
-                          : TRUST_TEXT.dataUnavailable}
+                          : "مخفي حتى التحقق"}
                       </div>
                     </div>
                   </div>

@@ -150,6 +150,8 @@ const SAMSUNG =
 const HUAWEI =
   "https://consumer.huawei.com/sa-en/";
 
+// محفوظ لاستخدامه عند إضافة عروض متجر شاومي الرسمي
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const XIAOMI =
   "https://www.mi.com/global/";
 
