@@ -1,15 +1,20 @@
 import Link from "next/link";
 import { dashboardCounts, legacyPendingCount } from "../lib/admin/db";
-import { currentClaims, PREVIEW_USERS, previewAuthEnabled } from "../lib/admin/session";
-import { loginAs } from "./actions";
+import { myPermissions } from "../lib/admin/db";
+import { supabasePublicConfig } from "../lib/auth/config";
+import { adminAuthMode, currentClaims, currentEmail, PREVIEW_USERS } from "../lib/admin/session";
+import { loginAs, logout } from "./actions";
 import AdminShell, { Flash, requireAdmin } from "./_components/AdminShell";
+import SupabaseLogin from "./_components/SupabaseLogin";
 
 type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
 
 export default async function AdminHome({ searchParams }: Props) {
   const { ok, err } = await searchParams;
 
-  if (!previewAuthEnabled()) {
+  const mode = adminAuthMode();
+
+  if (mode === "off") {
     return (
       <main className="container-page py-10">
         <h1 className="text-2xl font-bold">لوحة الإدارة</h1>
@@ -24,7 +29,37 @@ export default async function AdminHome({ searchParams }: Props) {
     );
   }
 
-  if (!(await currentClaims())) {
+  if (mode === "supabase") {
+    const cfg = supabasePublicConfig()!;
+    const claims = await currentClaims();
+    if (!claims || claims.aal !== "aal2") {
+      return (
+        <main className="container-page py-10">
+          <h1 className="text-center text-2xl font-bold">الدخول إلى لوحة الإدارة</h1>
+          <Flash ok={ok} err={err} />
+          <SupabaseLogin url={cfg.url} publishableKey={cfg.key} initialStep={claims ? "mfa" : "password"} />
+        </main>
+      );
+    }
+    if ((await myPermissions(claims)).length === 0) {
+      const email = await currentEmail();
+      return (
+        <main className="container-page py-10">
+          <div className="card mx-auto max-w-md p-6 text-center">
+            <h1 className="text-xl font-bold">لا توجد صلاحيات لهذا الحساب</h1>
+            <p className="mt-2 text-sm leading-7 text-ink-2">
+              تم الدخول بالحساب <span dir="ltr">{email}</span> لكنه لا يملك دورًا في لوحة الإدارة. يمنح المشرف الأدوار من صفحة المستخدمين.
+            </p>
+            <form action={logout} className="mt-4">
+              <button className="min-h-10 rounded-xl border border-line px-4 text-sm">خروج</button>
+            </form>
+          </div>
+        </main>
+      );
+    }
+  }
+
+  if (mode === "local-preview" && !(await currentClaims())) {
     return (
       <main className="container-page py-10">
         <div className="mx-auto max-w-2xl">

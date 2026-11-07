@@ -1,6 +1,6 @@
 import { Badge } from "../../components/ui";
 import { listStoresAndSources } from "../../lib/admin/db";
-import { addSource, addStore } from "../actions";
+import { addSource, addStore, changeSourceStatus } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
 
 type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
@@ -12,6 +12,8 @@ const KIND_LABEL: Record<string, string> = {
   affiliate_feed: "شبكة تسويق",
   official_api: "واجهة رسمية",
 };
+
+const SOURCE_STATUS: Record<string, string> = { draft: "مسودة", suspended: "موقوف", retired: "متقاعد" };
 
 export default async function StoresPage({ searchParams }: Props) {
   const { ok, err } = await searchParams;
@@ -101,13 +103,22 @@ export default async function StoresPage({ searchParams }: Props) {
               <li key={s.id} className="py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{s.name}</span>
-                  {s.status === "approved" ? <Badge tone="good">معتمد</Badge> : <Badge tone="warn">{s.status}</Badge>}
+                  {s.status === "approved" ? <Badge tone="good">معتمد</Badge> : <Badge tone="warn">{SOURCE_STATUS[s.status] ?? s.status}</Badge>}
                 </div>
                 <div className="text-xs text-ink-3">
                   <span dir="ltr">{s.id}</span> · {KIND_LABEL[s.kind] ?? s.kind}
                   {s.storeId ? ` · ${s.storeId}` : ""}
                 </div>
                 {s.permissionBasis && <div className="mt-0.5 text-xs text-ink-3">الإذن: {s.permissionBasis}</div>}
+                {can(ctx, "source:manage") && s.kind !== "legacy_manual" && (s.status === "approved" || s.status === "suspended") && (
+                  <form action={changeSourceStatus} className="mt-1">
+                    <input type="hidden" name="sourceId" value={s.id} />
+                    <input type="hidden" name="status" value={s.status === "approved" ? "suspended" : "approved"} />
+                    <button type="submit" className="text-xs text-ink-3 underline hover:text-ink">
+                      {s.status === "approved" ? "إيقاف مؤقت (لا يقبل استيرادًا جديدًا)" : "إعادة الاعتماد"}
+                    </button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>

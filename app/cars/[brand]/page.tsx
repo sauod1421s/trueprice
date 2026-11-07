@@ -21,6 +21,8 @@ import brands, { type CarModel } from "@/app/data/cars";
 import { Badge, BrandMonogram, Price, TrustNote } from "@/app/components/ui";
 import { Car3D, CarKey3D } from "@/app/components/illustrations";
 import { brandInitial, brandNameAr, brandSummaries } from "@/app/lib/carBrands";
+import { dataSource, getVerifiedCarOffers, showLegacyReference, type VerifiedCarOffer } from "@/app/lib/catalog";
+import { carSlugs } from "@/app/lib/catalog/carSlugs";
 import { TRUST_TEXT } from "@/app/lib/trust";
 
 const MARKET_SOURCE_NAMES: Record<string, string> = {
@@ -28,6 +30,13 @@ const MARKET_SOURCE_NAMES: Record<string, string> = {
   syarah: "سيارة",
   hatla2ee: "هتلاقي",
 };
+
+const verifiedDateFmt = new Intl.DateTimeFormat("ar-SA-u-nu-latn", {
+  timeZone: "Asia/Riyadh",
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
 
 const MARKET_REFERENCES = [
   { name: "موتري", url: "https://ksa.motory.com/ar/" },
@@ -105,6 +114,10 @@ export default async function Page({
   }
 
   const nameAr = brandNameAr[brandId] ?? brand.name;
+  // وضع db: الأسعار المعتمدة من المراجع تظهر بجانب المرجع القديم. الوضع الثابت: خريطة فارغة (لا تغيير)
+  const verified = await getVerifiedCarOffers(brandId);
+  const slugs = carSlugs(brandId, brand.models);
+  const showReference = dataSource() !== "db" || showLegacyReference();
 
   return (
     <main>
@@ -208,9 +221,14 @@ export default async function Page({
         {/* ================= MODELS ================= */}
         <section aria-label={`موديلات ${nameAr}`} className="mt-8">
           <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {brand.models.map((car) => (
+            {brand.models.map((car, i) => (
               <li key={`${car.name}-${car.year}-${car.trim ?? "base"}`}>
-                <ModelCard car={car} sourceName={brand.sourceName} />
+                <ModelCard
+                  car={car}
+                  sourceName={brand.sourceName}
+                  verified={verified.get(slugs[i]) ?? NO_OFFERS}
+                  showReference={showReference}
+                />
               </li>
             ))}
           </ul>
@@ -245,7 +263,19 @@ export default async function Page({
    بطاقة الموديل
 ========================================================= */
 
-function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
+const NO_OFFERS: VerifiedCarOffer[] = [];
+
+function ModelCard({
+  car,
+  sourceName,
+  verified,
+  showReference,
+}: {
+  car: CarModel;
+  sourceName: string;
+  verified: VerifiedCarOffer[];
+  showReference: boolean;
+}) {
   const fair = getFairPrice(car);
 
   return (
@@ -273,6 +303,31 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
         <Badge>جديد</Badge>
       </div>
 
+      {verified.length > 0 && (
+        <div className="mx-4 mb-3 rounded-xl border border-mint/50 bg-mint-50 p-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-good-soft">
+            <ShieldCheck size={13} aria-hidden />
+            سعر معتمد من مراجع
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {verified.map((o) => (
+              <li key={o.storeId} className="flex items-center justify-between gap-3 text-sm">
+                <a href={o.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-ink-2 hover:text-ink">
+                  {o.storeAr}
+                  <ExternalLink size={12} className="text-ink-3" aria-hidden />
+                </a>
+                <span className="text-left">
+                  <Price value={o.price} className="font-bold" />
+                  <span className="block text-[0.7rem] text-ink-3">بتاريخ {verifiedDateFmt.format(new Date(o.asOf))}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showReference ? (
+      <>
       <div className="flex items-end justify-between gap-3 px-4">
         <div>
           <div className="text-xs text-ink-3">السعر المرجعي</div>
@@ -288,6 +343,12 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
       </div>
 
       <div className="mt-1 px-4 text-[0.7rem] text-ink-3">المصدر المذكور: {sourceName}</div>
+      </>
+      ) : (
+        verified.length === 0 && (
+          <div className="px-4 text-sm text-ink-3">لا يوجد سعر معتمد لهذا الموديل بعد.</div>
+        )
+      )}
 
       {(car.engine || car.power || car.fuel) && (
         <div className="mt-3 flex flex-wrap gap-1.5 px-4">
@@ -297,6 +358,7 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
         </div>
       )}
 
+      {showReference && (
       <details className="group mt-auto border-t border-line [&:not([open])]:mt-4">
         <summary className="flex min-h-11 items-center justify-between gap-2 px-4 text-sm font-medium text-ink-2 transition-colors hover:text-ink">
           <span className="inline-flex items-center gap-1.5">
@@ -343,6 +405,7 @@ function ModelCard({ car, sourceName }: { car: CarModel; sourceName: string }) {
           <FairDetails fair={fair} />
         </div>
       </details>
+      )}
     </article>
   );
 }

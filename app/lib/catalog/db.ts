@@ -9,7 +9,7 @@ import staticProducts from "../../data/products";
 import { withPublic } from "../db/pool";
 import { electronicsFairPrice } from "../valuation/electronics";
 import { publicIdOf, showLegacyReference } from "./mode";
-import type { CatalogProduct, CatalogProductDetail, PriceHistoryPoint } from "./types";
+import type { CatalogProduct, CatalogProductDetail, PriceHistoryPoint, VerifiedCarOffer } from "./types";
 
 type ProductRow = {
   id: string;
@@ -189,5 +189,38 @@ export async function dbCounts(): Promise<{ products: number; stores: number }> 
               (select count(*) from pub.stores where id not like 'demo-%') as stores`
     );
     return { products: Number(r.rows[0].products), stores: Number(r.rows[0].stores) };
+  });
+}
+
+/** أسعار السيارات الجديدة المعتمدة لعلامة واحدة، مفهرسة بمعرّف الموديل (slug) */
+export async function dbVerifiedCarOffers(brandSlug: string): Promise<Map<string, VerifiedCarOffer[]>> {
+  return withPublic(async (c) => {
+    const r = await c.query<{
+      slug: string; store_id: string; store_name_ar: string; price_sar: string; list_price_sar: string | null;
+      canonical_url: string; price_as_of: Date; verified_at: Date | null;
+    }>(
+      `select p.slug, o.store_id, o.store_name_ar, o.price_sar, o.list_price_sar, o.canonical_url, o.price_as_of, o.verified_at
+       from pub.new_car_offers o
+       join pub.products p on p.id = o.product_id and p.category_kind = 'cars'
+       join pub.brands b on b.id = p.brand_id
+       where b.slug = $1
+       order by p.slug, o.price_sar, o.store_id`,
+      [brandSlug]
+    );
+    const out = new Map<string, VerifiedCarOffer[]>();
+    for (const x of r.rows) {
+      const list = out.get(x.slug) ?? [];
+      list.push({
+        storeId: x.store_id,
+        storeAr: x.store_name_ar,
+        price: Number(x.price_sar),
+        listPrice: x.list_price_sar === null ? null : Number(x.list_price_sar),
+        url: x.canonical_url,
+        asOf: x.price_as_of.toISOString(),
+        verifiedAt: x.verified_at?.toISOString() ?? null,
+      });
+      out.set(x.slug, list);
+    }
+    return out;
   });
 }

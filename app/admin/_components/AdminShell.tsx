@@ -2,8 +2,8 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { myPermissions } from "../../lib/admin/db";
-import { currentClaims, previewUser } from "../../lib/admin/session";
+import { myPermissions, myProfile } from "../../lib/admin/db";
+import { adminAuthMode, currentClaims, currentEmail } from "../../lib/admin/session";
 import type { DbClaims } from "../../lib/db/pool";
 import { logout } from "../actions";
 
@@ -13,17 +13,29 @@ const NAV = [
   { href: "/admin/stores", label: "المتاجر والمصادر" },
   { href: "/admin/prices", label: "استيراد الأسعار" },
   { href: "/admin/review", label: "مراجعة الأسعار" },
+  { href: "/admin/users", label: "المستخدمون" },
 ];
 
-export type AdminContext = { claims: DbClaims; permissions: string[]; userName: string; role: string };
+export type AdminContext = {
+  claims: DbClaims;
+  permissions: string[];
+  userName: string;
+  role: string;
+  mode: "supabase" | "local-preview" | "off";
+};
 
-/** يتحقق من الجلسة على الخادم؛ بدونها يعود لصفحة الدخول */
+/**
+ * يتحقق من الجلسة على الخادم؛ بدونها يعود لصفحة الدخول. في Supabase يلزم التحقق الثنائي (aal2)
+ * لكل صفحات اللوحة. الصلاحيات نفسها تحددها القاعدة عند كل عملية، وهذا للعرض فقط.
+ */
 export async function requireAdmin(): Promise<AdminContext> {
   const claims = await currentClaims();
-  if (!claims) redirect("/admin");
-  const user = previewUser(claims.sub);
-  const permissions = await myPermissions(claims);
-  return { claims, permissions, userName: user?.name ?? claims.sub, role: user?.role ?? "" };
+  if (!claims || claims.aal !== "aal2") redirect("/admin");
+  const [permissions, profile] = await Promise.all([myPermissions(claims), myProfile(claims)]);
+  if (permissions.length === 0) redirect("/admin");
+  const role = profile.roles.includes("admin") ? "admin" : (profile.roles[0] ?? "");
+  const email = await currentEmail();
+  return { claims, permissions, userName: profile.displayName ?? email ?? claims.sub, role, mode: adminAuthMode() };
 }
 
 export function Flash({ ok, err }: { ok?: string; err?: string }) {
@@ -56,9 +68,15 @@ export default function AdminShell({
 }) {
   return (
     <main className="container-page py-6 sm:py-8">
-      <div className="mb-4 rounded-2xl border border-coral/30 bg-coral-50 px-4 py-2 text-xs leading-6 text-coral-ink">
-        نسخة MVP تجريبية محلية — قاعدة بيانات مؤقتة على هذا الجهاز، ودخول تجريبي (ليس نظام الدخول النهائي).
-      </div>
+      {ctx.mode === "local-preview" ? (
+        <div className="mb-4 rounded-2xl border border-coral/30 bg-coral-50 px-4 py-2 text-xs leading-6 text-coral-ink">
+          نسخة MVP تجريبية محلية — قاعدة بيانات مؤقتة على هذا الجهاز، ودخول تجريبي (ليس نظام الدخول النهائي).
+        </div>
+      ) : (
+        <div className="mb-4 rounded-2xl border border-line bg-surface px-4 py-2 text-xs leading-6 text-ink-3">
+          نسخة MVP — الدخول عبر Supabase Auth مع التحقق الثنائي، والصلاحيات تحددها قاعدة البيانات في كل عملية.
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{title}</h1>
@@ -66,7 +84,7 @@ export default function AdminShell({
         </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="rounded-full border border-line bg-surface px-3 py-1">
-            {ctx.userName} · <span className="text-ink-3">{ctx.role === "admin" ? "مشرف" : ctx.role === "reviewer" ? "مراجع" : ctx.role}</span>
+            {ctx.userName} · <span className="text-ink-3">{ctx.role === "admin" ? "مشرف" : ctx.role === "reviewer" ? "مراجع" : ctx.role === "viewer" ? "مشاهد" : ctx.role}</span>
           </span>
           <form action={logout}>
             <button className="inline-flex min-h-9 items-center gap-1 rounded-full border border-line px-3 text-ink-2 hover:border-brand hover:text-brand">

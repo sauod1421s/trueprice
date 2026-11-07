@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Badge } from "../../components/ui";
 import { importLookups, listRuns } from "../../lib/admin/db";
-import { MVP_MAX_ROWS } from "../../lib/admin/priceRows";
-import { stageCsv, stageSinglePrice } from "../actions";
+import { MVP_MAX_BYTES, MVP_MAX_ROWS } from "../../lib/admin/priceRows";
+import { stageCsv, stageFeedFile, stageSinglePrice } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
 
 type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
@@ -96,6 +96,43 @@ export default async function PricesPage({ searchParams }: Props) {
               </Field>
               <Field label="أو اختر ملفًا"><input type="file" name="file" accept=".csv,text/csv" className="text-sm" /></Field>
               <SubmitButton>معاينة الملف</SubmitButton>
+            </form>
+          </section>
+
+          <section className="card p-5 lg:col-span-2">
+            <h2 className="font-bold">ملف شريك (CSV · Google Merchant · YML · XML)</h2>
+            <p className="mt-1 text-xs leading-6 text-ink-3">
+              يُحلَّل الملف على الخادم ويُطابق كل صف مع الكتالوج <strong>بالباركود أو رقم الموديل فقط</strong>. الصفوف التي
+              تشبه منتجًا بالاسم لا تُدمج تلقائيًا، بل تظهر في المعاينة كملاحظات. حتى{" "}
+              {MVP_MAX_ROWS.toLocaleString("en-US")} صف و{Math.round(MVP_MAX_BYTES / 1024)} ك.ب، والريال السعودي فقط. السعر
+              الذي لا يذكر الملف تاريخه يُعلَّم «تاريخ غير مؤكد» ولا يدخل في السعر العادل.
+            </p>
+            <form action={stageFeedFile} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="المصدر">
+                <select name="sourceId" required className={inputCls}>
+                  {sources.filter((s) => s.kind === "store_feed" || s.kind === "manual_upload").map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}{s.storeId ? ` (${s.storeId})` : ""}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="صيغة الملف">
+                <select name="format" className={inputCls}>
+                  <option value="auto">اكتشاف تلقائي</option>
+                  <option value="csv">CSV</option>
+                  <option value="google-merchant">Google Merchant (XML)</option>
+                  <option value="yml">YML (XML)</option>
+                  <option value="xml">XML عام</option>
+                </select>
+              </Field>
+              <Field label="المنطقة الزمنية للتواريخ" hint="للتواريخ التي لا تذكر منطقتها">
+                <input name="timeZone" className={inputCls} dir="ltr" placeholder="Asia/Riyadh" />
+              </Field>
+              <Field label="الملف">
+                <input type="file" name="file" required accept=".csv,.xml,.txt,text/csv,application/xml,text/xml" className="text-sm" />
+              </Field>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <SubmitButton>تحليل الملف ومعاينته</SubmitButton>
+              </div>
             </form>
           </section>
         </div>

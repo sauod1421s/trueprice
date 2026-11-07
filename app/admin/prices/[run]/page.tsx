@@ -7,6 +7,19 @@ import AdminShell, { can, Flash, requireAdmin, SubmitButton } from "../../_compo
 
 type Props = { params: Promise<{ run: string }>; searchParams: Promise<{ ok?: string; err?: string }> };
 
+const AVAILABILITY: Record<string, string> = { out_of_stock: "غير متوفر", preorder: "طلب مسبق", unknown: "غير محدد" };
+
+const ISSUE_LABEL: Record<string, string> = {
+  needs_review: "يحتاج مطابقة",
+  unmatched: "غير موجود",
+  store_unknown: "متجر غير معروف",
+  currency_not_supported: "عملة غير الريال",
+  condition_not_supported: "ليس جديدًا",
+  row_rejected: "صف غير صالح",
+  duplicate_offer: "مكرر",
+  issues_truncated: "مختصر",
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export default async function RunPage({ params, searchParams }: Props) {
@@ -16,7 +29,7 @@ export default async function RunPage({ params, searchParams }: Props) {
   const ctx = await requireAdmin();
   const detail = await runDetail(ctx.claims, runId);
   if (!detail) notFound();
-  const { run, rows } = detail;
+  const { run, rows, issues } = detail;
   const pending = run.status === "previewed";
 
   return (
@@ -63,13 +76,46 @@ export default async function RunPage({ params, searchParams }: Props) {
                     {r.currentPrice === null ? <span className="text-ink-3">جديد</span> : r.currentPrice === r.amount ? "بلا تغيير" : <Price value={r.currentPrice} />}
                   </td>
                   <td className="px-4 py-2 text-ink-3" dir="ltr">{r.asOf.slice(0, 16).replace("T", " ")} UTC</td>
-                  <td className="px-4 py-2">{r.availability === "in_stock" ? <Badge tone="good">متوفر</Badge> : <Badge>{r.availability}</Badge>}</td>
+                  <td className="px-4 py-2">{r.availability === "in_stock" ? <Badge tone="good">متوفر</Badge> : <Badge>{AVAILABILITY[r.availability] ?? r.availability}</Badge>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </section>
+
+      {issues.length > 0 && (
+        <section className="card mt-5 overflow-hidden">
+          <h2 className="p-5 pb-1 font-bold">صفوف لم تُرفع ({issues.length})</h2>
+          <p className="px-5 pb-3 text-xs leading-6 text-ink-3">
+            هذه الصفوف من الملف لم تدخل المعاينة ولن تُطبق. المطابقة بالاسم لا تُعتمد تلقائيًا أبدًا: أضف الباركود أو رقم
+            الموديل للمنتج الصحيح من <Link className="underline" href="/admin/catalog">الكتالوج</Link> ثم أعد رفع الملف.
+          </p>
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full min-w-[40rem] text-sm">
+              <thead className="sticky top-0 bg-surface-2 text-right text-xs text-ink-3">
+                <tr>
+                  <th className="px-4 py-2 font-medium">صف</th>
+                  <th className="px-4 py-2 font-medium">الاسم في الملف</th>
+                  <th className="px-4 py-2 font-medium">السبب</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {issues.map((i, n) => (
+                  <tr key={n}>
+                    <td className="num px-4 py-2 text-ink-3">{i.rowNo || "—"}</td>
+                    <td className="px-4 py-2 text-ink-2">{i.name ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <Badge tone={i.severity === "error" ? "coral" : "warn"}>{ISSUE_LABEL[i.code] ?? i.code}</Badge>{" "}
+                      <span className="text-xs text-ink-3">{i.message}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <div className="mt-4 rounded-2xl border border-line bg-surface-2 p-4 text-xs text-ink-3">
         بصمة المعاينة المختومة: <code dir="ltr" className="break-all">{run.contentSha256 ?? "—"}</code>

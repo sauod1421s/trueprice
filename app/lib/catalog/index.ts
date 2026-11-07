@@ -9,10 +9,10 @@ import { connection } from "next/server";
 import brands from "../../data/cars";
 import staticProducts from "../../data/products";
 import { dataSource } from "./mode";
-import type { CatalogProduct, CatalogProductDetail, SiteStats } from "./types";
+import type { CatalogProduct, CatalogProductDetail, SiteStats, VerifiedCarOffer } from "./types";
 
 export { dataSource, showLegacyReference, publicIdOf, NEW_PRODUCT_ID_OFFSET } from "./mode";
-export type { CatalogProduct, CatalogProductDetail, PriceHistoryPoint, SiteStats } from "./types";
+export type { CatalogProduct, CatalogProductDetail, PriceHistoryPoint, SiteStats, VerifiedCarOffer } from "./types";
 
 const carStats = {
   carBrands: Object.keys(brands).length,
@@ -53,6 +53,16 @@ export async function getSiteStats(): Promise<SiteStats> {
     stores: new Set(staticProducts.flatMap((p) => p.offers.map((o) => o.store))).size,
     ...carStats,
   };
+}
+
+/**
+ * أسعار السيارات الجديدة المعتمدة لعلامة (وضع db فقط). في الوضع الثابت تعيد خريطة فارغة
+ * دون أي اتصال، فتبقى صفحة العلامة ثابتة ومطابقة للموقع الحالي تمامًا.
+ */
+export async function getVerifiedCarOffers(brandId: string): Promise<Map<string, VerifiedCarOffer[]>> {
+  if (!(await requestTimeIfDb())) return new Map();
+  const [{ dbVerifiedCarOffers }, { carBrandSlug }] = await Promise.all([import("./db"), import("./carSlugs")]);
+  return dbVerifiedCarOffers(carBrandSlug(brandId));
 }
 
 /** معرّفات تُبنى مسبقًا وقت البناء (المنتجات الحالية) — الجديدة تُعرض عند الطلب */

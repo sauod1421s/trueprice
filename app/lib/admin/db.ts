@@ -9,6 +9,10 @@ import type { PoolClient } from "pg";
 import { withClaims, type DbClaims } from "../db/pool";
 import { NEW_PRODUCT_ID_OFFSET, publicIdOf } from "../catalog/mode";
 import type { DraftRow, StageRow } from "./priceRows";
+import type { FeedIssue, FeedStageResult, FeedStageRow } from "./feedRows";
+import type { CatalogEntry } from "../ingest/matching";
+import type { ApprovedAliases, StoreRecord } from "../ingest/stores";
+import type { FeedFormat } from "../ingest/types";
 
 export type Option = { id: string; label: string };
 
@@ -16,6 +20,13 @@ export async function myPermissions(claims: DbClaims): Promise<string[]> {
   return withClaims(claims, async (c) => {
     const r = await c.query<{ p: string }>("select p from admin_api.my_permissions() as p");
     return r.rows.map((x) => x.p);
+  });
+}
+
+export async function myProfile(claims: DbClaims): Promise<{ displayName: string | null; roles: string[] }> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ display_name: string | null; roles: string[] }>("select * from admin_api.my_profile()");
+    return { displayName: r.rows[0]?.display_name ?? null, roles: r.rows[0]?.roles ?? [] };
   });
 }
 
@@ -275,23 +286,186 @@ export async function stageImport(
 
     // "الملف" = محتوى الإدخال + وقت الإرسال، فيُرفض إرسال نفس الملف مرتين فقط عند CSV متطابق
     const fileBody = input.format === "manual" ? `${input.content}\n${new Date().toISOString()}` : input.content;
-    const sha = createHash("sha256").update(fileBody).digest("hex");
-    const run = await c.query<{ id: string }>(
-      `select admin_api.register_import($1, $2, $3, $4, $5, 'mvp-admin-1', $6, $7::jsonb, $8::jsonb) as id`,
-      [
-        input.sourceId, `imports/mvp/${sha}`, input.fileName, Math.max(1, Buffer.byteLength(fileBody)), sha,
-        input.format, JSON.stringify({ max_rows: 1000 }),
-        JSON.stringify({ accepted: rows.length, rejected: input.issues }),
-      ]
+    return registerStageSeal(c, {
+      sourceId: input.sourceId, fileName: input.fileName, format: input.format, fileBody, rows,
+      totals: { accepted: rows.length, rejected: input.issues }, issues: [],
+    });
+  });
+}
+
+/** تسجيل الملف + رفع الصفوف على دفعات + الختم، داخل معاملة المستخدم نفسها */
+async function registerStageSeal(
+  c: PoolClient,
+  input: {
+    sourceId: string; fileName: string; format: "csv" | "manual" | FeedFormat; fileBody: string;
+    rows: readonly (StageRow | FeedStageRow)[]; totals: Record<string, number>; issues: readonly FeedIssue[];
+  }
+): Promise<{ runId: string; contentSha256: string }> {
+  const sha = createHash("sha256").update(input.fileBody).digest("hex");
+  const run = await c.query<{ id: string }>(
+    `select admin_api.register_import($1, $2, $3, $4, $5, 'mvp-admin-1', $6, $7::jsonb, $8::jsonb, $9::jsonb) as id`,
+    [
+      input.sourceId, `imports/mvp/${sha}`, input.fileName, Math.max(1, Buffer.byteLength(input.fileBody)), sha,
+      input.format, JSON.stringify({ max_rows: 1000 }), JSON.stringify(input.totals), JSON.stringify(input.issues),
+    ]
+  );
+  const runId = run.rows[0].id;
+  for (let i = 0; i < input.rows.length; i += 500) {
+    await c.query(`select admin_api.stage_import_rows($1, $2, $3::jsonb)`, [
+      runId, i + 1, JSON.stringify(input.rows.slice(i, i + 500)),
+    ]);
+  }
+  const sealed = await c.query<{ h: string }>(`select admin_api.seal_import($1, $2) as h`, [runId, input.rows.length]);
+  return { runId, contentSha256: sealed.rows[0].h };
+}
+
+/* ------------------------------------------------------------------ ملفات الشركاء */
+
+export type FeedSource = {
+  id: string; name: string; kind: string; storeId: string | null;
+  defaultCurrency: string | null; timeZone: string | null; columnMap: Record<string, string>;
+};
+
+/**
+ * كل ما يحتاجه محرك الاستيراد من القاعدة: الكتالوج مع الباركودات وأرقام الموديل،
+ * وسجل المتاجر النشطة بنطاقاتها وأسمائها البديلة المعتمدة، وإعداد المصدر.
+ */
+export async function feedContext(claims: DbClaims, sourceId: string) {
+  return withClaims(claims, async (c) => {
+    const src = await c.query<{
+      id: string; name: string; kind: string; store_id: string | null; default_currency: string | null;
+      time_zone: string | null; column_map: Record<string, string>;
+    }>(
+      `select id, name, kind, store_id, default_currency, time_zone, column_map from admin_api.sources
+       where id = $1 and status = 'approved' and vertical = 'electronics' and kind in ('manual_upload', 'store_feed')`,
+      [sourceId]
     );
-    const runId = run.rows[0].id;
-    for (let i = 0; i < rows.length; i += 500) {
-      await c.query(`select admin_api.stage_import_rows($1, $2, $3::jsonb)`, [
-        runId, i + 1, JSON.stringify(rows.slice(i, i + 500)),
-      ]);
+    const products = await c.query<{ id: string; name: string; name_ar: string | null; brand: string }>(
+      `select p.id, p.name, p.name_ar, b.name as brand from admin_api.products p
+       join admin_api.brands b on b.id = p.brand_id
+       where p.category_kind = 'electronics' and p.status = 'active'`
+    );
+    const idents = await c.query<{ product_id: string; kind: string; value: string }>(
+      `select product_id, kind::text, value from admin_api.product_identifiers where kind in ('gtin', 'mpn')`
+    );
+    const stores = await c.query<{ id: string; name: string; name_ar: string; is_marketplace: boolean }>(
+      `select id, name, name_ar, is_marketplace from admin_api.stores where status = 'active' and merged_into is null`
+    );
+    const domains = await c.query<{ domain: string; store_id: string }>(`select domain, store_id from admin_api.store_domains`);
+    const aliases = await c.query<{ normalized: string; store_id: string }>(`select normalized, store_id from admin_api.store_aliases`);
+
+    const byProduct = new Map<string, { gtins: string[]; mpns: string[] }>();
+    for (const i of idents.rows) {
+      const e = byProduct.get(i.product_id) ?? { gtins: [], mpns: [] };
+      (i.kind === "gtin" ? e.gtins : e.mpns).push(i.value);
+      byProduct.set(i.product_id, e);
     }
-    const sealed = await c.query<{ h: string }>(`select admin_api.seal_import($1, $2) as h`, [runId, rows.length]);
-    return { runId, contentSha256: sealed.rows[0].h };
+    const catalog: CatalogEntry[] = products.rows.map((p) => ({
+      id: Number(p.id),
+      label: p.name_ar ?? p.name,
+      brand: p.brand,
+      names: [p.name, p.name_ar ?? "", `${p.brand} ${p.name}`].filter(Boolean),
+      gtins: byProduct.get(p.id)?.gtins ?? [],
+      mpns: byProduct.get(p.id)?.mpns ?? [],
+    }));
+    const registry: StoreRecord[] = stores.rows.map((s) => ({
+      id: s.id,
+      name: s.name,
+      nameAr: s.name_ar,
+      domains: domains.rows.filter((d) => d.store_id === s.id).map((d) => d.domain),
+      aliases: [s.name, s.name_ar, s.id],
+      marketplace: s.is_marketplace,
+    }));
+    const s = src.rows[0];
+    return {
+      source: s
+        ? ({ id: s.id, name: s.name, kind: s.kind, storeId: s.store_id, defaultCurrency: s.default_currency,
+             timeZone: s.time_zone, columnMap: s.column_map ?? {} } satisfies FeedSource)
+        : null,
+      catalog,
+      registry,
+      approvedAliases: Object.fromEntries(aliases.rows.map((a) => [a.normalized, a.store_id])) as ApprovedAliases,
+      activeStores: new Set(stores.rows.map((x) => x.id)),
+      identifiedProducts: byProduct.size,
+    };
+  });
+}
+
+export async function stageFeed(
+  claims: DbClaims,
+  input: { sourceId: string; fileName: string; format: FeedFormat; content: string; staged: FeedStageResult }
+): Promise<{ runId: string; contentSha256: string }> {
+  return withClaims(claims, (c) =>
+    registerStageSeal(c, {
+      sourceId: input.sourceId, fileName: input.fileName, format: input.format, fileBody: input.content,
+      rows: input.staged.rows,
+      // seal_import يطابق عدد الصفوف المرفوعة مع totals.accepted
+      totals: { ...input.staged.counts, accepted: input.staged.rows.length, rejected: input.staged.counts.total - input.staged.rows.length },
+      issues: input.staged.issues,
+    })
+  );
+}
+
+/* ------------------------------------------------------------------ تعديل الكتالوج والمصادر */
+
+export type ProductIdentifier = { id: number; productId: number; kind: string; value: string };
+
+export async function listIdentifiers(claims: DbClaims): Promise<ProductIdentifier[]> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ id: string; product_id: string; kind: string; value: string }>(
+      `select id, product_id, kind::text, value from admin_api.product_identifiers order by id desc limit 500`
+    );
+    return r.rows.map((x) => ({ id: Number(x.id), productId: Number(x.product_id), kind: x.kind, value: x.value }));
+  });
+}
+
+/** يضيف باركود GTIN-14 أو رقم موديل (موحّدين مسبقًا) لمنتج إلكترونيات */
+export async function addIdentifier(
+  claims: DbClaims,
+  input: { productId: number; kind: "gtin" | "mpn"; value: string }
+): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const p = await c.query<{ brand_id: string }>(
+      `select brand_id from admin_api.products where id = $1 and category_kind = 'electronics'`,
+      [input.productId]
+    );
+    if (!p.rows[0]) throw new Error("المنتج غير موجود");
+    await c.query(
+      `insert into tp.product_identifiers (product_id, kind, value, brand_id, added_by) values ($1, $2, $3, $4, $5)`,
+      [input.productId, input.kind, input.value, input.kind === "mpn" ? p.rows[0].brand_id : null, claims.sub]
+    );
+  });
+}
+
+export async function removeIdentifier(claims: DbClaims, id: number): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const r = await c.query(`delete from tp.product_identifiers where id = $1 and kind in ('gtin', 'mpn')`, [id]);
+    if (r.rowCount !== 1) throw new Error("المعرّف غير موجود");
+  });
+}
+
+/** إخفاء منتج من الموقع (أرشفة) أو إعادته — لا يُحذف شيء ويبقى سجل أسعاره */
+export async function setProductStatus(claims: DbClaims, productId: number, status: "active" | "archived"): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const r = await c.query(
+      `update tp.products set status = $2 where id = $1 and category_kind = 'electronics' and status <> $2`,
+      [productId, status]
+    );
+    if (r.rowCount !== 1) throw new Error("المنتج غير موجود أو حالته كما هي");
+  });
+}
+
+/** إيقاف مصدر مؤقتًا أو إعادة اعتماده — المصدر الموقوف لا يقبل أي استيراد جديد */
+export async function setSourceStatus(claims: DbClaims, sourceId: string, status: "approved" | "suspended"): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const r = await c.query(
+      status === "approved"
+        ? `update tp.sources set status = 'approved', approved_by = $2, approved_at = now()
+           where id = $1 and status = 'suspended' and kind <> 'legacy_manual'`
+        : `update tp.sources set status = 'suspended' where id = $1 and status = 'approved' and kind <> 'legacy_manual'`,
+      status === "approved" ? [sourceId, claims.sub] : [sourceId]
+    );
+    if (r.rowCount !== 1) throw new Error("المصدر غير موجود أو حالته لا تسمح بهذا التغيير");
   });
 }
 
@@ -348,8 +522,17 @@ export async function runDetail(claims: DbClaims, runId: string) {
        where sr.run_id = $1 order by sr.row_no limit 1000`,
       [runId]
     );
+    const issues = await c.query<{ row_no: number; severity: string; code: string; message: string; excerpt: Record<string, unknown> | null }>(
+      `select row_no, severity::text, code, message, excerpt from admin_api.import_row_issues
+       where run_id = $1 order by row_no, id limit 500`,
+      [runId]
+    );
     return {
       run,
+      issues: issues.rows.map((i) => ({
+        rowNo: i.row_no, severity: i.severity, code: i.code, message: i.message,
+        name: typeof i.excerpt?.name === "string" ? i.excerpt.name : null,
+      })),
       rows: rows.rows.map((r) => ({
         rowNo: r.row_no,
         storeId: r.store_id,
@@ -523,8 +706,36 @@ export function friendlyDbError(e: unknown): string {
   if (msg.includes("duplicate file")) return "هذا الملف نفسه مسجل من قبل.";
   if (msg.includes("mvp_sar_only")) return "الأسعار بالريال السعودي فقط في MVP.";
   if (msg.includes("exceeds max_commit_rows")) return "عدد الصفوف أكبر من حد MVP (1,000 صف). الاستيراد الضخم معطّل مؤقتًا.";
+  if (msg.includes("cannot grant a role to yourself")) return "لا يمكنك منح دور لنفسك.";
+  if (msg.includes("cannot revoke the last active admin")) return "لا يمكن سحب دور آخر مشرف فعّال.";
+  if (msg.includes("user must exist in Supabase Auth")) return "هذا المعرّف غير موجود في Supabase Auth. أنشئ الحساب أولًا من لوحة Supabase.";
+  if (msg.includes("display name must be")) return "الاسم المعروض مطلوب (من 2 إلى 120 حرفًا).";
+  if (msg.includes("role not assigned")) return "هذا الدور غير ممنوح لهذا المستخدم.";
   if (code === "23505") return "القيمة موجودة مسبقًا (المعرّف مستخدم).";
   if (code === "23514" && msg.includes("rejection")) return "الرفض يتطلب ملاحظة.";
   if (code === "23514") return "قيمة غير مقبولة: تحقق من الحقول (المعرّف بأحرف لاتينية صغيرة وشرطة، والروابط تبدأ بـ https://).";
   return `تعذّر تنفيذ العملية: ${msg.split("\n")[0].slice(0, 200)}`;
+}
+
+/* ------------------------------------------------------------------ المستخدمون والأدوار */
+
+export type AdminUser = { userId: string; displayName: string; status: string; roles: string[] };
+
+export async function listUsers(claims: DbClaims): Promise<AdminUser[]> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ user_id: string; display_name: string; status: string; roles: string[] }>(
+      "select * from admin_api.list_users()"
+    );
+    return r.rows.map((x) => ({ userId: x.user_id, displayName: x.display_name, status: x.status, roles: x.roles }));
+  });
+}
+
+export async function upsertProfile(claims: DbClaims, userId: string, displayName: string): Promise<void> {
+  await withClaims(claims, (c) => c.query("select admin_api.upsert_profile($1, $2)", [userId, displayName]));
+}
+
+export async function setRole(claims: DbClaims, userId: string, role: string, grant: boolean): Promise<void> {
+  await withClaims(claims, (c) =>
+    c.query(grant ? "select admin_api.grant_role($1, $2)" : "select admin_api.revoke_role($1, $2)", [userId, role])
+  );
 }

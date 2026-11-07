@@ -10,18 +10,33 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  addIdentifier,
   commitImport,
   createProduct,
   createSource,
   createStore,
   decide,
   discardImport,
+  feedContext,
   friendlyDbError,
   importLookups,
+  removeIdentifier,
+  setProductStatus,
+  setRole,
+  setSourceStatus,
+  stageFeed,
   stageImport,
+  upsertProfile,
 } from "../lib/admin/db";
-import { draftRow, draftRowsFromCsv, type ProductRef } from "../lib/admin/priceRows";
+import { feedSummary, feedToStageRows } from "../lib/admin/feedRows";
+import { draftRow, draftRowsFromCsv, MVP_MAX_BYTES, MVP_MAX_ROWS, type ProductRef } from "../lib/admin/priceRows";
+import { normalizeGtin, normalizeMpn } from "../lib/ingest/fields";
+import { runImport } from "../lib/ingest/importer";
+import { buildCatalogIndex } from "../lib/ingest/matching";
+import type { FeedFormat } from "../lib/ingest/types";
+import { supabaseServer } from "../lib/auth/supabaseServer";
 import {
+  adminAuthMode,
   currentClaims,
   makeSessionValue,
   PREVIEW_COOKIE,
@@ -42,7 +57,8 @@ function back(path: string, kind: "ok" | "err", message: string): never {
 
 async function claimsOrLogin() {
   const claims = await currentClaims();
-  if (!claims) redirect("/admin");
+  // اللوحة تتطلب التحقق الثنائي، والقاعدة تتحقق من ذلك أيضًا في كل عملية حساسة
+  if (!claims || claims.aal !== "aal2") redirect("/admin");
   return claims;
 }
 
@@ -66,6 +82,10 @@ export async function loginAs(fd: FormData) {
 export async function logout() {
   const store = await cookies();
   store.delete(PREVIEW_COOKIE);
+  if (adminAuthMode() === "supabase") {
+    const sb = await supabaseServer();
+    await sb.auth.signOut();
+  }
   redirect("/admin");
 }
 
@@ -98,7 +118,64 @@ export async function addProduct(fd: FormData) {
   back("/admin/catalog", "ok", `أُضيف المنتج (رقم ${created.publicId}). أضف له سعرًا من صفحة الأسعار.`);
 }
 
+/** باركود (GTIN) أو رقم موديل (MPN) لمنتج: هو ما يسمح بمطابقة ملفات الشركاء تلقائيًا */
+export async function addProductIdentifier(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const productId = Number(text(fd, "productId", 20));
+  const kind = text(fd, "kind", 10) === "mpn" ? "mpn" : "gtin";
+  const raw = text(fd, "value", 80);
+  const norm = kind === "gtin" ? normalizeGtin(raw) : normalizeMpn(raw);
+  const value = norm && (kind === "gtin" || /^[A-Z0-9]{3,64}$/.test(norm)) ? norm : null;
+  if (!Number.isSafeInteger(productId) || productId <= 0) back("/admin/catalog", "err", "اختر منتجًا");
+  if (!value) {
+    back("/admin/catalog", "err", kind === "gtin"
+      ? "الباركود غير صالح: يجب أن يكون 8 أو 12 أو 13 أو 14 رقمًا برقم تحقق صحيح"
+      : "رقم الموديل غير صالح: أحرف لاتينية وأرقام فقط (3-64)");
+  }
+  try {
+    await addIdentifier(claims, { productId, kind, value });
+  } catch (e) {
+    back("/admin/catalog", "err", friendlyDbError(e));
+  }
+  back("/admin/catalog", "ok", `أُضيف ${kind === "gtin" ? "الباركود" : "رقم الموديل"} ${value}. ملفات الشركاء ستطابق هذا المنتج تلقائيًا.`);
+}
+
+export async function deleteProductIdentifier(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const id = Number(text(fd, "id", 20));
+  try {
+    await removeIdentifier(claims, id);
+  } catch (e) {
+    back("/admin/catalog", "err", friendlyDbError(e));
+  }
+  back("/admin/catalog", "ok", "حُذف المعرّف (الأسعار المسجلة سابقًا لا تتأثر).");
+}
+
+export async function changeProductStatus(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const productId = Number(text(fd, "productId", 20));
+  const status = text(fd, "status", 10) === "active" ? "active" : "archived";
+  try {
+    await setProductStatus(claims, productId, status);
+  } catch (e) {
+    back("/admin/catalog", "err", friendlyDbError(e));
+  }
+  back("/admin/catalog", "ok", status === "active" ? "أُعيد المنتج للظهور." : "أُخفي المنتج من الموقع (لم يُحذف، وسجل أسعاره محفوظ).");
+}
+
 /* ------------------------------------------------------------------ المتاجر والمصادر */
+
+export async function changeSourceStatus(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const sourceId = text(fd, "sourceId", 60);
+  const status = text(fd, "status", 12) === "approved" ? "approved" : "suspended";
+  try {
+    await setSourceStatus(claims, sourceId, status);
+  } catch (e) {
+    back("/admin/stores", "err", friendlyDbError(e));
+  }
+  back("/admin/stores", "ok", status === "approved" ? `أُعيد اعتماد المصدر ${sourceId}` : `أُوقف المصدر ${sourceId}: لن يقبل أي استيراد جديد`);
+}
 
 export async function addStore(fd: FormData) {
   const claims = await claimsOrLogin();
@@ -212,6 +289,74 @@ export async function stageCsv(fd: FormData) {
   redirect(`/admin/prices/${runId}`);
 }
 
+const FEED_FORMATS = new Set<FeedFormat | "auto">(["auto", "csv", "google-merchant", "yml", "xml"]);
+
+/**
+ * ملف شريك (CSV / Google Merchant / YML / XML) → تحليل ومطابقة على الخادم →
+ * رفع الصفوف المطابقة بباركود أو رقم موديل فقط → معاينة مختومة.
+ * الصفوف الأخرى تُحفظ كملاحظات في نفس العملية ولا تُطبق.
+ */
+export async function stageFeedFile(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const sourceId = text(fd, "sourceId", 60);
+  const formatRaw = text(fd, "format", 20) as FeedFormat | "auto";
+  const format = FEED_FORMATS.has(formatRaw) ? formatRaw : "auto";
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) back("/admin/prices", "err", "اختر ملف الشريك");
+  if (file.size > MVP_MAX_BYTES) {
+    back("/admin/prices", "err", `الملف أكبر من ${Math.round(MVP_MAX_BYTES / 1024)} ك.ب (الاستيراد الضخم معطّل مؤقتًا). قسّمه إلى ملفات أصغر.`);
+  }
+  const content = await file.text();
+  const fileName = file.name.slice(0, 200) || "feed";
+
+  const ctx = await feedContext(claims, sourceId);
+  if (!ctx.source) back("/admin/prices", "err", "المصدر غير موجود أو غير معتمد لرفع الملفات");
+  const timeZone = text(fd, "timeZone", 60) || ctx.source.timeZone || "Asia/Riyadh";
+
+  const result = runImport({
+    source: {
+      id: ctx.source.id,
+      name: ctx.source.name,
+      kind: ctx.source.kind === "store_feed" ? "store_feed" : "manual_upload",
+      storeId: ctx.source.storeId ?? undefined,
+      defaultCurrency: ctx.source.defaultCurrency ?? undefined,
+      timeZone,
+      columnMap: ctx.source.columnMap,
+    },
+    fileName,
+    content,
+    format,
+    catalog: buildCatalogIndex(ctx.catalog),
+    importedAt: new Date().toISOString(),
+    limits: { maxRows: MVP_MAX_ROWS, maxBytes: MVP_MAX_BYTES, maxDurationMs: 10_000 },
+    registry: ctx.registry,
+    approvedAliases: ctx.approvedAliases,
+  });
+  if (result.fatal) back("/admin/prices", "err", `لم يُستورد شيء: ${result.fatal.message}`);
+
+  const staged = feedToStageRows(result, { activeStores: ctx.activeStores });
+  if (staged.rows.length === 0) {
+    const hint = ctx.identifiedProducts === 0
+      ? " لا يوجد أي منتج له باركود أو رقم موديل بعد: أضفها من صفحة الكتالوج ليُطابَق الملف تلقائيًا."
+      : "";
+    const first = staged.issues.slice(0, 3).map((i) => (i.row ? `صف ${i.row}: ${i.message}` : i.message)).join(" · ");
+    back("/admin/prices", "err", `لا يوجد صف قابل للرفع. ${feedSummary(staged.counts)}.${hint} ${first}`.slice(0, 1500));
+  }
+  let runId: string;
+  try {
+    ({ runId } = await stageFeed(claims, {
+      sourceId: ctx.source.id,
+      fileName,
+      format: result.format ?? "csv",
+      content,
+      staged,
+    }));
+  } catch (e) {
+    back("/admin/prices", "err", friendlyDbError(e));
+  }
+  back(`/admin/prices/${runId}`, "ok", feedSummary(staged.counts));
+}
+
 export async function commitRun(fd: FormData) {
   const claims = await claimsOrLogin();
   const runId = text(fd, "runId", 64);
@@ -264,4 +409,38 @@ export async function reviewPrice(fd: FormData) {
     back(returnTo, "err", friendlyDbError(e));
   }
   back(returnTo, "ok", status === "verified" ? "اعتُمد السعر وأصبح ظاهرًا في صفحة المنتج" : "رُفض السعر ولن يظهر ولن يدخل في السعر العادل");
+}
+
+/* ------------------------------------------------------------------ المستخدمون والأدوار */
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ROLES = new Set(["admin", "reviewer", "viewer"]);
+
+export async function addUser(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const userId = text(fd, "user_id", 64).toLowerCase();
+  const role = text(fd, "role", 20);
+  if (!UUID_RE.test(userId)) back("/admin/users", "err", "المعرّف يجب أن يكون UUID كما يظهر في لوحة Supabase (Authentication → Users).");
+  if (!ROLES.has(role)) back("/admin/users", "err", "اختر دورًا صحيحًا.");
+  try {
+    await upsertProfile(claims, userId, text(fd, "display_name", 120));
+    await setRole(claims, userId, role, true);
+  } catch (e) {
+    back("/admin/users", "err", friendlyDbError(e));
+  }
+  back("/admin/users", "ok", "أُضيف المستخدم ومُنح الدور.");
+}
+
+export async function changeRole(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const userId = text(fd, "user_id", 64).toLowerCase();
+  const role = text(fd, "role", 20);
+  const grant = text(fd, "op", 10) === "grant";
+  if (!UUID_RE.test(userId) || !ROLES.has(role)) back("/admin/users", "err", "طلب غير صالح.");
+  try {
+    await setRole(claims, userId, role, grant);
+  } catch (e) {
+    back("/admin/users", "err", friendlyDbError(e));
+  }
+  back("/admin/users", "ok", grant ? "مُنح الدور." : "سُحب الدور.");
 }

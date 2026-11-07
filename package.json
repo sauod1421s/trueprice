@@ -14,10 +14,15 @@
     "mvp:dev": "node scripts/mvp/db.mjs dev",
     "mvp:build": "node scripts/mvp/db.mjs build",
     "mvp:start": "node scripts/mvp/db.mjs start",
-    "mvp:reset": "node scripts/mvp/db.mjs reset"
+    "mvp:reset": "node scripts/mvp/db.mjs reset",
+    "mvp:test-db": "node scripts/mvp/db.mjs test-db",
+    "data:seed": "node scripts/data/build-catalog-seed.mjs",
+    "data:seed:check": "node scripts/data/build-catalog-seed.mjs --check"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
     "fast-xml-parser": "^5.12.0",
     "lucide-react": "^1.45.0",
     "next": "^16.4.5",

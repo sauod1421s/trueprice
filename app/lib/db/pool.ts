@@ -9,6 +9,7 @@
  */
 import "server-only";
 import { Pool, type PoolClient } from "pg";
+import { poolConfig, TRANSACTION_SETTINGS } from "./connection";
 
 declare global {
   var __tpPool: Pool | undefined;
@@ -24,13 +25,7 @@ function pool(): Pool {
   }
   // نفس الاتصال عبر إعادة التحميل في وضع التطوير
   if (!globalThis.__tpPool) {
-    globalThis.__tpPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 5,
-      // مهلة طلب المستخدم المسجّل في Supabase
-      statement_timeout: 8000,
-      application_name: "trueprice-mvp",
-    });
+    globalThis.__tpPool = new Pool(poolConfig());
   }
   return globalThis.__tpPool;
 }
@@ -41,7 +36,8 @@ export type DbClaims = { sub: string; aal: "aal1" | "aal2" };
 async function inTransaction<T>(setup: (c: PoolClient) => Promise<void>, fn: (c: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool().connect();
   try {
-    await client.query("begin");
+    // ذهاب واحد إلى القاعدة: بدء المعاملة + حدودها (بروتوكول الاستعلام البسيط يقبل عدة أوامر)
+    await client.query(["begin", ...TRANSACTION_SETTINGS].join("; "));
     await setup(client);
     const result = await fn(client);
     await client.query("commit");

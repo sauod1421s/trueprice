@@ -1,7 +1,9 @@
 /**
- * دخول المعاينة المحلية للوحة الإدارة — للتجربة المحلية فقط.
+ * هوية لوحة الإدارة على الخادم بوضعين (app/lib/auth/config.ts):
+ *   - supabase: Supabase Auth مع التحقق الثنائي (aal2)، والهوية بعد التحقق من توقيع الرمز.
+ *   - local-preview: دخول المعاينة المحلية — للتجربة المحلية فقط (الوصف أدناه).
  *
- * ليس نظام الدخول النهائي: الإنتاج سيستخدم Supabase Auth مع التحقق الثنائي (aal2).
+ * دخول المعاينة المحلية ليس نظام الدخول النهائي.
  * هنا يختار المختبِر أحد مستخدمي الاختبار المسجلين في القاعدة المحلية، ويحمل
  * المتصفح ملف تعريف موقّعًا (HMAC) بسر يُولَّد محليًا في .local/ ولا يُحفظ في Git.
  * الصلاحيات نفسها لا تُقرأ من المتصفح: تحددها القاعدة من user_roles عند كل عملية.
@@ -11,6 +13,8 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { authMode } from "../auth/config";
+import { supabaseIdentity } from "../auth/supabaseServer";
 import type { DbClaims } from "../db/pool";
 
 export const PREVIEW_COOKIE = "tp_preview_session";
@@ -31,12 +35,11 @@ function secret(): string | null {
 }
 
 export function previewAuthEnabled(): boolean {
-  return (
-    process.env.TP_PREVIEW_AUTH === "on" &&
-    process.env.TP_DATA_SOURCE === "db" &&
-    !process.env.VERCEL &&
-    secret() !== null
-  );
+  return authMode() === "local-preview" && secret() !== null;
+}
+
+export function adminAuthMode() {
+  return authMode();
 }
 
 function sign(payload: string, key: string): string {
@@ -66,11 +69,22 @@ export function readSessionValue(value: string | undefined, nowMs: number, key =
 
 /** هوية الجلسة على الخادم (لا تُقبل من حقول النماذج أبدًا) */
 export async function currentClaims(): Promise<DbClaims | null> {
+  const mode = authMode();
+  if (mode === "supabase") {
+    const id = await supabaseIdentity();
+    return id ? { sub: id.sub, aal: id.aal } : null;
+  }
   if (!previewAuthEnabled()) return null;
   const store = await cookies();
   const uid = readSessionValue(store.get(PREVIEW_COOKIE)?.value, Date.now());
-  // دخول المعاينة يحاكي جلسة اجتازت التحقق الثنائي (aal2) — Supabase Auth لاحقًا
+  // دخول المعاينة يحاكي جلسة اجتازت التحقق الثنائي (aal2)
   return uid ? { sub: uid, aal: "aal2" } : null;
+}
+
+/** بريد مستخدم Supabase (للعرض فقط) */
+export async function currentEmail(): Promise<string | null> {
+  if (authMode() !== "supabase") return null;
+  return (await supabaseIdentity())?.email ?? null;
 }
 
 export function previewUser(uid: string | undefined | null) {

@@ -39,3 +39,15 @@ export type SiteStats = {
   carBrands: number;
   carModels: number;
 };
+
+/** سعر سيارة جديدة معتمد من مراجع (من pub.new_car_offers — المؤهل للعرض فقط) */
+export type VerifiedCarOffer = {
+  storeId: string;
+  storeAr: string;
+  price: number;
+  listPrice: number | null;
+  url: string;
+  /** وقت السعر كما ذكره المصدر (UTC ISO) */
+  asOf: string;
+  verifiedAt: string | null;
+};
