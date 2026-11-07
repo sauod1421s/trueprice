@@ -1,5 +1,6 @@
 -- =====================================================================
--- TruePrice — مخطط قاعدة البيانات v1.1 (مسودة للمراجعة — لم يُنفَّذ على Supabase)
+-- TruePrice — مخطط قاعدة البيانات v1.1.1 (لم يُنفَّذ على Supabase بعد)
+-- v1.1.1: توافق Supabase — tp.profiles (مفتاحه الأجنبي إلى auth.users) يبقى بمالك دور الترحيل؛ انظر القسم 23.
 --
 -- المتطلبات: PostgreSQL 15 أو أحدث (Supabase). يُشغَّل بدور الترحيل (postgres في Supabase).
 -- قابل لإعادة التشغيل: كل أمر إما idempotent أو محمي بفحص وجود، والملف كله معاملة واحدة.
@@ -2393,8 +2394,29 @@ begin
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('tp', 'pub', 'admin_api', 'ingest_api') and c.relkind in ('r', 'v', 'p')
       and pg_get_userbyid(c.relowner) <> 'tp_owner'
+      -- v1.1.1 (توافق Supabase): جدول له مفتاح أجنبي إلى مخطط auth يبقى بمالك دور الترحيل (postgres)،
+      -- لأن Supabase لا يسمح لدور مخصص بامتلاك جدول يشير إلى auth.users. يُمنح tp_owner صلاحياته أدناه.
+      and not exists (select 1 from pg_constraint k join pg_class rc on rc.oid = k.confrelid
+                      join pg_namespace rn on rn.oid = rc.relnamespace
+                      where k.conrelid = c.oid and k.contype = 'f' and rn.nspname = 'auth')
   loop
     execute format('alter %s %I.%I owner to tp_owner', case r.relkind when 'v' then 'view' else 'table' end, r.nspname, r.relname);
+  end loop;
+  -- الجداول المستثناة (حاليًا tp.profiles): صلاحيات كاملة لـ tp_owner + سياسة RLS له، لأنه لم يعد مالكها
+  for r in
+    select c.relname
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'tp' and c.relkind in ('r', 'p')
+      and exists (select 1 from pg_constraint k join pg_class rc on rc.oid = k.confrelid
+                  join pg_namespace rn on rn.oid = rc.relnamespace
+                  where k.conrelid = c.oid and k.contype = 'f' and rn.nspname = 'auth')
+  loop
+    execute format('grant select, insert, update, delete, references, trigger on tp.%I to tp_owner', r.relname);
+    if not exists (select 1 from pg_policies where schemaname = 'tp' and tablename = r.relname
+                   and policyname = r.relname || '_tp_owner_all') then
+      execute format('create policy %I on tp.%I for all to tp_owner using (true) with check (true)',
+                     r.relname || '_tp_owner_all', r.relname);
+    end if;
   end loop;
   for r in
     select p.oid::regprocedure as sig
@@ -2480,5 +2502,6 @@ insert into tp.currencies (code, minor_units, name_ar) values
 on conflict (code) do nothing;
 
 insert into tp.schema_migrations (version) values ('v1.1') on conflict (version) do nothing;
+insert into tp.schema_migrations (version) values ('v1.1.1') on conflict (version) do nothing;
 
 commit;

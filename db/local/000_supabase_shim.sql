@@ -35,6 +35,9 @@ grant usage on schema storage to anon, authenticated, service_role;
 grant select, insert, update, delete on storage.objects to anon, authenticated, service_role;
 grant select on storage.buckets to anon, authenticated, service_role;
 grant storage_admin to supa_postgres;
+-- في Supabase (PG17) يملك postgres عضوية بخيار الإدارة في anon/authenticated/service_role،
+-- فيستطيع منحها لأدوار التطبيق (مثل tp_app). نحاكي ذلك ليُختبر ملف db/supabase/010 بنفس شروطه.
+grant anon, authenticated, service_role to supa_postgres with admin option;
 
 -- امتيازات Supabase الافتراضية في public (نحاكيها للتأكد أنها لا تتسرب لمخططاتنا)
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;

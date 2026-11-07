@@ -90,6 +90,54 @@ grant select on pub.product_details, pub.price_history to web_reader;
 grant select, insert, update on tp.product_details to authenticated;
 grant select on admin_api.product_details to authenticated;
 
+-- هوية المستخدم الحالي للعرض في اللوحة (اسمه وأدواره الفعّالة) — لا تمنح أي صلاحية
+create or replace function admin_api.my_profile() returns table (display_name text, roles text[])
+language sql stable security definer set search_path = '' as $$
+  select pr.display_name,
+         coalesce(array(select ur.role_id from tp.user_roles ur
+                        where ur.user_id = pr.user_id and (ur.expires_at is null or ur.expires_at > now())
+                        order by ur.role_id), '{}')
+  from tp.profiles pr
+  where pr.user_id = tp.current_uid() and pr.status = 'active'
+$$;
+revoke all on function admin_api.my_profile() from public;
+grant execute on function admin_api.my_profile() to authenticated;
+
+-- إدارة المستخدمين من اللوحة (user:manage، يتطلب تحققًا ثنائيًا). الحساب نفسه يُنشأ في Supabase Auth،
+-- وهنا يُربط بملف شخصي ثم تُمنح الأدوار بدالة grant_role الموجودة (لا أحد يمنح نفسه).
+create or replace function admin_api.list_users() returns table (user_id uuid, display_name text, status text, roles text[])
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform tp.require_permission('user:manage');
+  return query
+    select pr.user_id, pr.display_name, pr.status,
+           coalesce(array(select ur.role_id from tp.user_roles ur
+                          where ur.user_id = pr.user_id and (ur.expires_at is null or ur.expires_at > now())
+                          order by ur.role_id), '{}')
+    from tp.profiles pr order by pr.created_at;
+end $$;
+revoke all on function admin_api.list_users() from public;
+grant execute on function admin_api.list_users() to authenticated;
+
+create or replace function admin_api.upsert_profile(p_user uuid, p_display_name text) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_uid uuid := tp.require_permission('user:manage'); v_name text := pg_catalog.btrim(p_display_name);
+begin
+  if v_name is null or pg_catalog.length(v_name) < 2 or pg_catalog.length(v_name) > 120 then
+    raise exception 'display name must be 2-120 characters' using errcode = '22023';
+  end if;
+  begin
+    insert into tp.profiles (user_id, display_name) values (p_user, v_name)
+    on conflict (user_id) do update set display_name = excluded.display_name;
+  exception when foreign_key_violation then
+    raise exception 'user must exist in Supabase Auth first' using errcode = '23503';
+  end;
+  perform tp.write_audit('user.profile', 'user', p_user::text, null,
+                         pg_catalog.jsonb_build_object('display_name', v_name), v_uid);
+end $$;
+revoke all on function admin_api.upsert_profile(uuid, text) from public;
+grant execute on function admin_api.upsert_profile(uuid, text) to authenticated;
+
 -- ---------------------------------------------------------------------
 -- 3) تعطيل مؤقت لميزات خارج MVP (قابل للعكس — restore_disabled_features.sql)
 -- ---------------------------------------------------------------------
@@ -119,4 +167,5 @@ on conflict (key) do nothing;
 update tp.settings set value = 1000 where key = 'max_commit_rows' and value <> 1000;
 
 insert into tp.schema_migrations (version) values ('mvp-overlay-1') on conflict (version) do nothing;
+insert into tp.schema_migrations (version) values ('mvp-overlay-2') on conflict (version) do nothing;
 commit;

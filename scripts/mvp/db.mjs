@@ -7,6 +7,7 @@
  *   node scripts/mvp/db.mjs start   # تشغيل القاعدة + نسخة البناء (next start) بوضع MVP
  *   node scripts/mvp/db.mjs reset   # حذف القاعدة المحلية وإعادة الإعداد من البداية
  *   node scripts/mvp/db.mjs env     # طباعة متغيرات البيئة (بدون كلمات المرور)
+ *   node scripts/mvp/db.mjs test-db # تشغيل القاعدة + اختبارات قواعد القاعدة (CI)
  *
  * كل الملفات المولدة (البيانات، كلمات المرور، سر الجلسة) في .local/ وهي مستبعدة من Git.
  */
@@ -17,7 +18,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import pg from "pg";
-import { seedCatalog } from "./seed.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const LOCAL = join(ROOT, ".local");
@@ -76,7 +76,13 @@ async function runFile(c, file, label) {
   const sql = readFileSync(join(ROOT, file), "utf8");
   process.stdout.write(`  • ${label} ... `);
   const t0 = Date.now();
-  await c.query(sql);
+  try {
+    await c.query(sql);
+  } catch (e) {
+    console.log("فشل");
+    console.error(`  ✗ ${file}: ${e.message}${e.detail ? ` — ${e.detail}` : ""}${e.where ? `\n    ${e.where.split("\n")[0]}` : ""}`);
+    throw e;
+  }
   console.log(`تم (${Date.now() - t0} ms)`);
 }
 
@@ -99,22 +105,30 @@ async function setup() {
     await runFile(admin, "db/local/000_supabase_shim.sql", "محاكاة أدوار Supabase (محلي فقط)");
     await admin.query(`alter role supa_postgres password '${env.TP_MIGRATOR_PASSWORD.replace(/'/g, "''")}'`);
 
+    // نفس ترتيب ملفات الإنتاج (docs/supabase-production-plan.md)، بدور ترحيل غير مدير مثل postgres في Supabase
     const migrator = client(env, "supa_postgres", env.TP_MIGRATOR_PASSWORD);
     await migrator.connect();
-    await runFile(migrator, "db/schema/001_trueprice_v1_1.sql", "مخطط v1.1 كما هو (دور ترحيل غير مدير)");
-    await runFile(migrator, "db/mvp/002_mvp_overlay.sql", "طبقة MVP (تفاصيل المنتج، سجل الأسعار، التعطيل المؤقت)");
+    await runFile(migrator, "db/schema/001_trueprice_v1_1.sql", "001 المخطط v1.1.1 (دور ترحيل غير مدير)");
+    await runFile(migrator, "db/mvp/002_mvp_overlay.sql", "002 طبقة MVP (تفاصيل المنتج، سجل الأسعار، التعطيل المؤقت)");
+    await runFile(migrator, "db/supabase/010_app_role.sql", "010 دور اتصال التطبيق tp_app");
+    // محليًا فقط: كلمة مرور tp_app من .local (في الإنتاج: db/supabase/020 تولّدها داخل القاعدة)
+    await migrator.query(`alter role tp_app password '${env.TP_APP_PASSWORD.replace(/'/g, "''")}'`);
+
+    await runFile(admin, "db/local/003_local_preview_users.sql", "مستخدمو المعاينة المحليون وتهيئة أول مشرفين");
+
+    await runFile(migrator, "db/seed/100_catalog_seed.sql", "100 نقل الكتالوج والسيارات والأسعار المرجعية (غير موثقة)");
+    const counts = await migrator.query(`select
+        (select count(*) from tp.products where category_kind = 'electronics') as electronics,
+        (select count(*) from tp.products where category_kind = 'cars') as cars,
+        (select count(*) from tp.price_observations) as prices,
+        (select count(*) from tp.verification_events) as verified`);
+    const k = counts.rows[0];
+    console.log(`  • في القاعدة: ${k.electronics} منتجًا إلكترونيًا، ${k.cars} سيارة، ${k.prices} سعرًا مرجعيًا، ${k.verified} قرار توثيق`);
     await migrator.end();
 
-    await admin.query("select set_config('tp.app_password', $1, false)", [env.TP_APP_PASSWORD]);
-    await runFile(admin, "db/local/003_local_preview_users.sql", "دور التطبيق ومستخدمو المعاينة");
     const violations = await admin.query("select * from tp.privilege_violations()");
     console.log(`  • فاحص الصلاحيات: ${violations.rowCount} مخالفة`);
     await admin.end();
-
-    const app = client(env, "tp_app", env.TP_APP_PASSWORD);
-    await app.connect();
-    await seedCatalog(app, ROOT);
-    await app.end();
     console.log("\nجاهز. شغّل الموقع: npm run mvp:dev  ثم افتح http://localhost:3000");
   } finally {
     await pgc.stop();
@@ -133,7 +147,7 @@ function appEnv(env) {
   };
 }
 
-async function runWithDb(args) {
+async function runWithDb(args, bin = "node_modules/next/dist/bin/next") {
   const env = loadOrCreateEnv();
   if (!existsSync(join(DATA_DIR, "PG_VERSION"))) {
     console.error("القاعدة المحلية غير موجودة. شغّل أولًا: npm run mvp:setup");
@@ -142,7 +156,7 @@ async function runWithDb(args) {
   const pgc = cluster(env);
   await pgc.start();
   console.log(`PostgreSQL المحلية تعمل على 127.0.0.1:${env.TP_PG_PORT} (قاعدة ${DB_NAME})`);
-  const child = spawn(process.execPath, [join(ROOT, "node_modules/next/dist/bin/next"), ...args], {
+  const child = spawn(process.execPath, [join(ROOT, bin), ...args], {
     cwd: ROOT,
     env: appEnv(env),
     stdio: "inherit",
@@ -164,10 +178,12 @@ else if (cmd === "build") await runWithDb(["build", ...process.argv.slice(3)]);
 else if (cmd === "reset") {
   rmSync(DATA_DIR, { recursive: true, force: true });
   await setup();
+} else if (cmd === "test-db") {
+  await runWithDb(["run", "tests/mvp/db-rules.test.ts", ...process.argv.slice(3)], "node_modules/vitest/vitest.mjs");
 } else if (cmd === "env") {
   const env = loadOrCreateEnv();
   console.log(`TP_DATA_SOURCE=db\nDATABASE_URL=postgres://tp_app:****@127.0.0.1:${env.TP_PG_PORT}/${DB_NAME}\nTP_PREVIEW_AUTH=on`);
 } else {
-  console.log("الاستخدام: node scripts/mvp/db.mjs setup|dev|start|build|reset|env");
+  console.log("الاستخدام: node scripts/mvp/db.mjs setup|dev|start|build|reset|test-db|env");
   process.exit(1);
 }
