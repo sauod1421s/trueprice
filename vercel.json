@@ -6,7 +6,9 @@
       "phase-1-affiliate-connectors": false,
       "phase-1-ingest-hardening": false,
       "phase-1-nextjs-upgrade": false,
-      "phase-1-release-candidate": false
+      "phase-1-release-candidate": false,
+      "mvp-*": false,
+      "mvp-live-preview": false
     }
   }
 }
