@@ -3,14 +3,32 @@
 - المشروع: `trueprice-production` (`xlpzfnespldgaxkgskkg`) — Frankfurt (`eu-central-1`) — PostgreSQL 17 — الخطة المجانية.
 - الفرع المصدر: `mvp-live-preview` فقط. لا تعديل على `main` ولا على الموقع الرسمي ولا DNS.
 
-## الحالة الحالية في Supabase (تم التحقق منها مباشرة)
+## الحالة الحالية في Supabase (تحقق مباشر بقراءة فقط — 2026-11-08)
 
 | البند | الحالة |
 | --- | --- |
-| مخططات TruePrice (`tp`، `pub`، `admin_api`، `ingest_api`) | **غير موجودة** — لم يُطبَّق المخطط بعد |
-| أدوار TruePrice (`tp_owner`، `tp_app`، `web_reader`، `ingest_service`) | غير موجودة |
-| مستخدمو Authentication | 0 |
-| ما طُبّق فعلًا | ترحيل واحد فقط `tp_migrate_staging`: مخطط مؤقت `tp_migrate` فيه جدول نصي بثلاثة أجزاء من 001 (من محاولة سابقة أُوقفت). مغلق على كل الأدوار العامة، ولا ينفّذ شيئًا. يبقى حتى توافق على حذفه. |
+| `setup_all.sql` | **نُفّذ** من SQL Editor (Run without RLS) — الترحيلات الخمسة: `v1.1`، `v1.1.1`، `mvp-overlay-1`، `mvp-overlay-2`، `003-visitors-requests` |
+| الجداول | 49 جدولًا في `tp`، RLS مفعّل على 49/49، و74 سياسة، و12 واجهة في `pub`، و62 دالة DEFINER مالكها `tp_owner` |
+| فحص المخالفات `tp.privilege_violations()` | 0 — ولا صلاحية لـ anon/public/service_role على أي جدول أو واجهة للمشروع |
+| المشرف | حساب واحد (bootstrap) بدور `admin` (18 صلاحية)؛ اللوحة تفرض التحقق الثنائي |
+| البيانات | 52 إلكترونيات + 357 سيارة + 283 سعرًا مرجعيًا غير موثق؛ 0 أسعار معتمدة منشورة |
+| `tp_app` | دُوّرت كلمة مروره داخل القاعدة بعد التنفيذ؛ رابط `DATABASE_URL` الجديد محفوظ مشفّرًا في Supabase Vault باسم `trueprice_preview_database_url` (لم يظهر في أي رسالة ولا سجل). الرابط الذي ظهر في SQL Editor لم يعد يعمل |
+| `tp_migrate` | باقٍ كما هو (3 أجزاء نصية، RLS، بلا صلاحيات عامة) — يُحذف لاحقًا بموافقة فقط |
+| تحذير التنفيذ الوحيد | `no privileges were granted for "pub"` من سطر مكرر في 002 (يعمل بدور `tp_owner`): الصلاحية نفسها مُنحت قبله في 001 — `web_reader` يملك USAGE على `pub` (فُحص) |
+
+### تدوير كلمة مرور `tp_app` لاحقًا (بلا إظهارها)
+
+```sql
+-- يولّد كلمة مرور جديدة داخل القاعدة ويحدّث سر Vault نفسه (لا يُعرض شيء)
+do $$ declare v_pw text := replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
+          v_id uuid := (select id from vault.secrets where name = 'trueprice_preview_database_url');
+begin
+  execute format('alter role tp_app password %L', v_pw);
+  perform vault.update_secret(v_id, 'postgresql://tp_app.xlpzfnespldgaxkgskkg:' || v_pw || '@aws-1-eu-central-1.pooler.supabase.com:6543/postgres');
+end $$;
+```
+
+ثم يُنسخ السر من Vault إلى Vercel وتُعاد معاينة الفرع.
 
 ## الطريقة: ملف واحد في SQL Editor
 
