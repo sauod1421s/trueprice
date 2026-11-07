@@ -110,6 +110,7 @@ async function setup() {
     await migrator.connect();
     await runFile(migrator, "db/schema/001_trueprice_v1_1.sql", "001 المخطط v1.1.1 (دور ترحيل غير مدير)");
     await runFile(migrator, "db/mvp/002_mvp_overlay.sql", "002 طبقة MVP (تفاصيل المنتج، سجل الأسعار، التعطيل المؤقت)");
+    await runFile(migrator, "db/schema/003_visitors_requests.sql", "003 إحصائيات الزوار وطلبات التواصل");
     await runFile(migrator, "db/supabase/010_app_role.sql", "010 دور اتصال التطبيق tp_app");
     // محليًا فقط: كلمة مرور tp_app من .local (في الإنتاج: db/supabase/020 تولّدها داخل القاعدة)
     await migrator.query(`alter role tp_app password '${env.TP_APP_PASSWORD.replace(/'/g, "''")}'`);
@@ -140,7 +141,8 @@ function appEnv(env) {
     ...process.env,
     TP_DATA_SOURCE: "db",
     DATABASE_URL: env.DATABASE_URL,
-    TP_PREVIEW_AUTH: "on",
+    // TP_PREVIEW_AUTH=off يختبر مسار Supabase Auth محليًا (مع NEXT_PUBLIC_SUPABASE_*)
+    TP_PREVIEW_AUTH: process.env.TP_PREVIEW_AUTH === "off" ? "off" : "on",
     TP_PREVIEW_SESSION_SECRET: env.TP_PREVIEW_SESSION_SECRET,
     TRUEPRICE_ADMIN_PREVIEW: "on",
     NEXT_TELEMETRY_DISABLED: "1",
@@ -179,7 +181,7 @@ else if (cmd === "reset") {
   rmSync(DATA_DIR, { recursive: true, force: true });
   await setup();
 } else if (cmd === "test-db") {
-  await runWithDb(["run", "tests/mvp/db-rules.test.ts", ...process.argv.slice(3)], "node_modules/vitest/vitest.mjs");
+  await runWithDb(["run", "tests/mvp/db-", ...process.argv.slice(3)], "node_modules/vitest/vitest.mjs");
 } else if (cmd === "env") {
   const env = loadOrCreateEnv();
   console.log(`TP_DATA_SOURCE=db\nDATABASE_URL=postgres://tp_app:****@127.0.0.1:${env.TP_PG_PORT}/${DB_NAME}\nTP_PREVIEW_AUTH=on`);
