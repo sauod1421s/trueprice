@@ -168,6 +168,44 @@ async function main() {
     const pubLeak = await su("v_two", "select count(*) as n from pub.electronics_offers");
     ok(Number(pubLeak.rows[0].n) === 0, "لا سعر قديم يظهر كسعر معتمد (pub.electronics_offers = 0)");
 
+    // 3ب) RLS: كل جدول ينشئه الملف عليه RLS بعد التشغيل (42 عبر الحلقة في 001 + 7 بأوامر صريحة في 002/003)،
+    //     ولا صلاحية لـ anon/public/service_role على أي جدول في مخططاتنا
+    const created = [...SETUP.matchAll(/create\s+table\s+if\s+not\s+exists\s+tp\.(\w+)/gi)].map((x) => x[1]);
+    const rlsInfo = await su("v_two", `select count(*)::int as n, count(*) filter (where relrowsecurity)::int as rls,
+        array_agg(relname::text) filter (where not relrowsecurity) as missing
+      from pg_class where relnamespace = 'tp'::regnamespace and relkind = 'r'`);
+    ok(rlsInfo.rows[0].n === new Set(created).size && rlsInfo.rows[0].rls === rlsInfo.rows[0].n,
+       "RLS مفعّل على كل جداول tp التي ينشئها الملف", `${rlsInfo.rows[0].rls}/${rlsInfo.rows[0].n}`);
+    const anonGrants = await su("v_two", `select count(*)::int as n from information_schema.role_table_grants
+      where table_schema in ('tp','pub','admin_api','ingest_api') and grantee in ('anon','PUBLIC','service_role')`);
+    ok(anonGrants.rows[0].n === 0, "لا صلاحية لـ anon/public/service_role على جداول وواجهات المشروع");
+
+    // 3ج) محاكاة زر Supabase «Run and enable RLS»: يُلحق ALTER TABLE ... ENABLE ROW LEVEL SECURITY في آخر النص
+    //     للجداول التي لا يرى لها أمرًا صريحًا (42 جدولًا من 001). النتيجة: لا تغيير في القاعدة (RLS مفعّل أصلًا)،
+    //     لكن آخر نتيجة تصبح ALTER بلا صفوف، فيختفي صف database_url من الشاشة.
+    const explicit = new Set([...SETUP.matchAll(/alter\s+table\s+tp\.(\w+)\s+enable\s+row\s+level\s+security/gi)].map((x) => x[1]));
+    const flagged = [...new Set(created)].filter((t) => !explicit.has(t));
+    await freshDb("v_studio");
+    await su("v_studio", `insert into auth.users (id, email) values ('00000000-0000-4000-8000-00000000e001', 'studio@test.invalid')`);
+    const studioSql = SETUP.replace(/\s+$/, "") +
+      "\n\n-- Added by Supabase: enable Row Level Security on newly created tables\n" +
+      flagged.map((t) => `ALTER TABLE tp.${t} ENABLE ROW LEVEL SECURITY;`).join("\n") + "\n";
+    const studioRun = await withClient("supa_postgres", MIG_PW, "v_studio", async (c) => {
+      try {
+        const res = await c.query(studioSql);
+        const list = Array.isArray(res) ? res : [res];
+        return { ok: true, last: list[list.length - 1] };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+    ok(studioRun.ok, `«Run and enable RLS»: ينجح بلا أخطاء (${flagged.length} أمر ALTER مكرر)`, studioRun.ok ? "" : studioRun.error);
+    ok(studioRun.ok && !studioRun.last.rows?.length, "«Run and enable RLS»: آخر نتيجة بلا صفوف — صف database_url لا يظهر في الشاشة");
+    const fs1 = (await su("v_studio", FINGERPRINT)).rows[0].fp;
+    const fs2 = (await su("v_two", FINGERPRINT)).rows[0].fp;
+    ok(fs1 === fs2, "«Run and enable RLS»: البنية والصلاحيات مطابقة تمامًا للتشغيل العادي (لا يضيف حماية جديدة)");
+    await withClient("postgres", SU_PW, "postgres", (c) => c.query("drop database v_studio"));
+
     // 4) إعادة التشغيل
     const audit1 = await su("v_two", "select count(*) as n from tp.products");
     r = await runSetup("v_two");
