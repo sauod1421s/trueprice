@@ -8,7 +8,8 @@ export type PriceOffer = {
   /** لا يوجد أي سعر موثق حاليًا — انظر app/lib/trust.ts */
   isVerified: boolean;
   verificationStatus: VerificationStatus;
-  entryMethod: "manual";
+  /** manual = مُدخل يدويًا (البيانات الحالية) · import = عبر الاستيراد والمراجعة (MVP) */
+  entryMethod: "manual" | "import";
   checkedAt: string;
   /** تاريخ الجمع لم يُثبت بمصدر بعد */
   dateConfirmed: boolean;
@@ -43,6 +44,10 @@ export type Product = {
   officialPrice?: number;
   lastUpdated?: string;
   lastUpdatedConfirmed?: boolean;
+  battery?: string;
+  waterResistance?: string;
+  colors?: string[];
+  amazonUrl?: string;
 };
 
 /**

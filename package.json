@@ -9,22 +9,31 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "mvp:setup": "node scripts/mvp/db.mjs setup",
+    "mvp:dev": "node scripts/mvp/db.mjs dev",
+    "mvp:build": "node scripts/mvp/db.mjs build",
+    "mvp:start": "node scripts/mvp/db.mjs start",
+    "mvp:reset": "node scripts/mvp/db.mjs reset"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
     "fast-xml-parser": "^5.12.0",
     "lucide-react": "^1.45.0",
     "next": "^16.4.5",
+    "pg": "8.23.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.12",
+    "embedded-postgres": "17.11.0-beta.19",
     "eslint": "^9",
     "eslint-config-next": "^16.4.5",
     "tailwindcss": "^4",

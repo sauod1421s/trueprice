@@ -1,12 +1,13 @@
 import type { MetadataRoute } from "next";
-import products from "./data/products";
+import { getProducts } from "./lib/catalog";
 import brands from "./data/cars";
 import { SITE_URL } from "./lib/site";
 
 /*
  * لا نضع lastModified لأن تواريخ الأسعار الحالية غير مؤكدة.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const products = await getProducts();
   const staticPages: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, priority: 1 },
     { url: `${SITE_URL}/search`, priority: 0.8 },
@@ -14,7 +15,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/methodology`, priority: 0.5 },
   ];
 
-  const productPages = products.map((p) => ({
+  // بيانات العرض/الاختبار لا تدخل خريطة الموقع
+  const productPages = products.filter((p) => !p.isDemo).map((p) => ({
     url: `${SITE_URL}/product/${p.id}`,
     priority: 0.7,
   }));

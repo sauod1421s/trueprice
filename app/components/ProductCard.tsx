@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronLeft, ExternalLink, Lock } from "lucide-react";
 import Link from "next/link";
-import type { Product } from "../data/products";
+import type { CatalogProduct } from "../lib/catalog/types";
 import { computeSaving, electronicsFairPrice } from "../lib/valuation/electronics";
 import { CategoryArt } from "./illustrations";
 import { Badge, Price, formatNumber } from "./ui";
@@ -18,7 +18,7 @@ const CATEGORY_TINT: Record<string, string> = {
   TV: "from-cream via-white to-cream",
 };
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product }: { product: CatalogProduct }) {
   // السعر العادل من الأسعار الموثقة فقط — لا يُعرض إذا لم تتوفر بيانات موثوقة
   const fair = electronicsFairPrice(product.offers);
   const saving = computeSaving(fair.fairPrice, product.lowestPrice);
@@ -26,6 +26,10 @@ export default function ProductCard({ product }: { product: Product }) {
     product.offers.length > 0 &&
     product.offers.every((o) => o.verificationStatus === "verified");
   const hasPrices = product.offers.length > 0;
+  // أسعار مرّت بالاستيراد والمراجعة (نسخة MVP) مقابل الأسعار المرجعية المُدخلة يدويًا
+  const approvedPipeline = hasPrices && product.offers.every((o) => o.entryMethod === "import");
+  const legacy = product.legacyReference ?? [];
+  const legacyMin = legacy.length ? Math.min(...legacy.map((o) => o.price)) : null;
   const tint = CATEGORY_TINT[product.category] ?? "from-cream via-white to-cream";
 
   const range = product.highestPrice - product.lowestPrice;
@@ -47,8 +51,11 @@ export default function ProductCard({ product }: { product: Product }) {
         <span className="absolute right-3 top-3">
           {hasPrices && (
             <Badge tone={verified ? "good" : "warn"} className="shadow-sm">
-              {verified ? "موثق" : "غير موثق"}
+              {verified ? (approvedPipeline ? "معتمد" : "موثق") : "غير موثق"}
             </Badge>
+          )}
+          {product.isDemo && (
+            <Badge tone="coral" className="mr-1 shadow-sm">بيانات تجريبية</Badge>
           )}
         </span>
         <span className="absolute left-3 top-3">
@@ -80,7 +87,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <div className="mt-4 rounded-2xl border border-line bg-surface-2 p-3">
             <div className="flex items-end justify-between gap-2">
               <div>
-                <div className="text-xs text-ink-3">أقل سعر مرجعي</div>
+                <div className="text-xs text-ink-3">{approvedPipeline ? "أقل سعر معتمد" : "أقل سعر مرجعي"}</div>
                 <div className="text-[1.35rem] font-bold leading-tight">
                   <Price value={product.lowestPrice} />
                 </div>
@@ -129,7 +136,13 @@ export default function ProductCard({ product }: { product: Product }) {
           </div>
         ) : (
           <div className="mt-4 rounded-2xl border border-dashed border-line-strong bg-surface-2 p-4 text-center text-sm text-ink-3">
-            لا توجد أسعار متاحة حاليًا
+            {legacy.length > 0 ? "لا توجد أسعار معتمدة بعد" : "لا توجد أسعار متاحة حاليًا"}
+            {legacyMin !== null && (
+              <div className="mt-1.5 text-xs">
+                سعر مرجعي قديم غير معتمد يبدأ من <Price value={legacyMin} className="font-medium text-ink-2" />
+                <span className="block text-[0.7rem]">لا يدخل في أي حساب</span>
+              </div>
+            )}
           </div>
         )}
 

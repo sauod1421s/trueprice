@@ -6,19 +6,25 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import ProductCard from "../components/ProductCard";
 import { TrustNote } from "../components/ui";
-import products from "../data/products";
+import type { CatalogProduct } from "../lib/catalog/types";
 import { searchProducts } from "../lib/search";
 import { TRUST_TEXT } from "../lib/trust";
 
-const categories = Array.from(
-  new Map(products.map((p) => [p.category, p.categoryAr])).entries()
-);
-
 export default function SearchClient({
   initialQuery = "",
+  products,
+  approvedOnly = false,
 }: {
   initialQuery?: string;
+  /** نسخة MVP: الأسعار المعروضة معتمدة بعد المراجعة فقط */
+  approvedOnly?: boolean;
+  /** من طبقة البيانات على الخادم (البيانات الحالية أو قاعدة MVP) */
+  products: CatalogProduct[];
 }) {
+  const categories = useMemo(
+    () => Array.from(new Map(products.map((p) => [p.category, p.categoryAr])).entries()),
+    [products]
+  );
   const router = useRouter();
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
@@ -54,7 +60,7 @@ export default function SearchClient({
     return searchProducts(products, query).filter(
       (product) => category === "all" || product.category === category
     );
-  }, [query, category]);
+  }, [products, query, category]);
 
   const chip = (active: boolean) =>
     `inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm transition-colors ${
@@ -145,10 +151,17 @@ export default function SearchClient({
           </span>
         </div>
 
-        <TrustNote className="mb-6">
-          جميع الأسعار {TRUST_TEXT.manualEntry} و{TRUST_TEXT.unverified}، و
-          {TRUST_TEXT.dateUnconfirmed}. تحقّق من السعر لدى المتجر قبل الشراء.
-        </TrustNote>
+        {approvedOnly ? (
+          <TrustNote className="mb-6">
+            تُعرض هنا الأسعار المعتمدة بعد المراجعة فقط. المنتجات بلا سعر معتمد تظهر بدون سعر، والأسعار
+            المرجعية القديمة لا تدخل في أي حساب. تحقّق من السعر لدى المتجر قبل الشراء.
+          </TrustNote>
+        ) : (
+          <TrustNote className="mb-6">
+            جميع الأسعار {TRUST_TEXT.manualEntry} و{TRUST_TEXT.unverified}، و
+            {TRUST_TEXT.dateUnconfirmed}. تحقّق من السعر لدى المتجر قبل الشراء.
+          </TrustNote>
+        )}
 
         {results.length === 0 ? (
           <div className="card bg-cream-wash flex flex-col items-center px-6 py-10 text-center">

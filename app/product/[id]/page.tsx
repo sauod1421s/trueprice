@@ -8,7 +8,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import products from "../../data/products";
+import {
+  dataSource,
+  getProduct,
+  staticProductIds,
+  type CatalogProductDetail,
+} from "../../lib/catalog";
+import PriceHistory from "../../components/PriceHistory";
+import LegacyReferencePrices from "../../components/LegacyReferencePrices";
 import {
   computeSaving,
   electronicsFairPrice,
@@ -79,25 +86,31 @@ type PageProps = {
 };
 
 export function generateStaticParams() {
-  return products.map((p) => ({ id: String(p.id) }));
+  // المنتجات الحالية تُبنى مسبقًا؛ المنتجات الجديدة (وضع MVP) تُعرض عند الطلب
+  return staticProductIds().map((id) => ({ id: String(id) }));
 }
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = products.find((item) => item.id === Number(id));
+  const product = await getProduct(Number(id));
 
   if (!product) {
     return { title: "المنتج غير موجود", robots: { index: false } };
   }
 
   const title = `سعر ${product.nameAr} في السعودية`;
-  const description = `مقارنة الأسعار المرجعية لـ ${product.nameAr} (${product.name}) لدى ${product.offers.length} متاجر في السعودية. الأسعار مُدخلة يدويًا وغير موثقة بعد — تحقق من المتجر قبل الشراء.`;
+  const description =
+    dataSource() === "db"
+      ? `أسعار ${product.nameAr} (${product.name}) المعتمدة بعد المراجعة لدى ${product.offers.length} متاجر في السعودية، مع سجل الأسعار. تحقق من المتجر قبل الشراء.`
+      : `مقارنة الأسعار المرجعية لـ ${product.nameAr} (${product.name}) لدى ${product.offers.length} متاجر في السعودية. الأسعار مُدخلة يدويًا وغير موثقة بعد — تحقق من المتجر قبل الشراء.`;
 
   return {
     title,
     description,
+    // بيانات العرض/الاختبار لا تُفهرس
+    robots: product.isDemo ? { index: false, follow: false } : undefined,
     alternates: { canonical: `/product/${product.id}` },
     openGraph: {
       title,
@@ -113,13 +126,14 @@ export async function generateMetadata({
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
 
-  const product = products.find(
-    (item) => item.id === Number(id)
-  ) as ProductPageProduct | undefined;
+  const detail = await getProduct(Number(id));
 
-  if (!product) {
+  if (!detail) {
     notFound();
   }
+  const product = detail as ProductPageProduct & CatalogProductDetail;
+  const isDb = dataSource() === "db";
+  const noPrices = product.offers.length === 0;
 
   /*
    * السعر العادل يُحسب من الأسعار الموثقة فقط (محرك الإلكترونيات).
@@ -188,6 +202,22 @@ export default async function ProductPage({ params }: PageProps) {
             {product.nameAr || product.name}
           </li>
         </ol>
+
+        {/* بيانات عرض/اختبار */}
+        {product.isDemo && (
+          <TrustNote className="mb-5" title="بيانات تجريبية للعرض فقط">
+            هذا المنتج وأسعاره ومتاجره بيانات اختبار لتجربة دورة العمل في النسخة
+            التجريبية المحلية. ليست أسعار سوق ولا تمثل متاجر حقيقية.
+          </TrustNote>
+        )}
+
+        {/* وضع MVP: لا توجد أسعار معتمدة بعد */}
+        {isDb && product.offers.length === 0 && (
+          <TrustNote className="mb-5" title="لا توجد أسعار معتمدة لهذا المنتج بعد">
+            لا يُعرض أي سعر قبل مراجعته واعتماده من مشرف مخوّل. الأسعار المرجعية
+            القديمة (إن وُجدت) معروضة أدناه منفصلة ولا تدخل في أي حساب.
+          </TrustNote>
+        )}
 
         {/* تنبيه حالة البيانات */}
         {hasUnverified && (
@@ -309,6 +339,14 @@ export default async function ProductPage({ params }: PageProps) {
               )}
             </section>
 
+            {/* سجل الأسعار المعتمدة (وضع MVP) */}
+            {isDb && <PriceHistory points={product.history} />}
+
+            {/* الأسعار المرجعية القديمة: منفصلة وغير معتمدة */}
+            {isDb && product.legacyReference && product.legacyReference.length > 0 && (
+              <LegacyReferencePrices offers={product.legacyReference} />
+            )}
+
             {/* المواصفات */}
             {specs.length > 0 && (
               <section className="card p-5 sm:p-6">
@@ -393,9 +431,9 @@ export default async function ProductPage({ params }: PageProps) {
         <section className="theme-forest bg-hero relative overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-card)]">
           <div className="bg-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
           <div className="relative p-5">
-            <div className="text-sm text-ink-3">أقل سعر مرجعي</div>
+            <div className="text-sm text-ink-3">{isDb ? "أقل سعر معتمد" : "أقل سعر مرجعي"}</div>
             <div className="mt-1 text-3xl font-bold text-mint">
-              {product.price !== null ? (
+              {product.offers.length > 0 && product.price !== null ? (
                 <Price value={product.price} unitClassName="text-ink-3 text-[0.55em] font-medium" />
               ) : (
                 <span className="text-lg text-ink-3">غير متوفر</span>
@@ -403,15 +441,15 @@ export default async function ProductPage({ params }: PageProps) {
             </div>
             {product.offers.length > 0 && (
               <div className="mt-1 text-xs text-ink-3">
-                لدى <span className="num">{product.offers.length}</span> متاجر مرجعية
+                لدى <span className="num">{product.offers.length}</span> {isDb ? "متاجر (أسعار معتمدة)" : "متاجر مرجعية"}
               </div>
             )}
           </div>
 
           <dl className="relative grid grid-cols-3 gap-px border-t border-line bg-line text-center">
-            <PriceStat title="أقل سعر" value={product.lowestPrice} />
-            <PriceStat title="متوسط السوق" value={product.averagePrice} />
-            <PriceStat title="أعلى سعر" value={product.highestPrice} />
+            <PriceStat title="أقل سعر" value={noPrices ? null : product.lowestPrice} />
+            <PriceStat title="متوسط السوق" value={noPrices ? null : product.averagePrice} />
+            <PriceStat title="أعلى سعر" value={noPrices ? null : product.highestPrice} />
           </dl>
         </section>
 
@@ -478,9 +516,9 @@ export default async function ProductPage({ params }: PageProps) {
           <InfoBox
             icon={<ShieldCheck size={15} aria-hidden />}
             title="حالة البيانات"
-            value={hasUnverified ? TRUST_TEXT.unverified : "موثقة"}
-            note={hasUnverified ? TRUST_TEXT.manualEntry : undefined}
-            tone={hasUnverified ? "warn" : "good"}
+            value={noPrices ? "لا توجد أسعار معتمدة" : hasUnverified ? TRUST_TEXT.unverified : isDb ? "معتمدة بعد المراجعة" : "موثقة"}
+            note={noPrices ? "بانتظار المراجعة" : hasUnverified ? TRUST_TEXT.manualEntry : undefined}
+            tone={noPrices || hasUnverified ? "warn" : "good"}
           />
 
           <InfoBox

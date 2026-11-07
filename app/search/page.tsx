@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { dataSource, getProducts } from "../lib/catalog";
 import SearchClient from "./SearchClient";
 
 type PageProps = {
@@ -25,6 +26,8 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const { q } = await searchParams;
   const initialQuery = typeof q === "string" ? q : "";
 
+  const products = await getProducts();
+
   // key يضمن إعادة تهيئة البحث عند تغيّر الرابط من صفحة أخرى
-  return <SearchClient key={initialQuery} initialQuery={initialQuery} />;
+  return <SearchClient key={initialQuery} initialQuery={initialQuery} products={products} approvedOnly={dataSource() === "db"} />;
 }

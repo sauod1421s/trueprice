@@ -20,7 +20,7 @@ import { Badge, Price, SectionHeading, formatNumber } from "./components/ui";
 import products from "./data/products";
 import { brandSummaries, featuredBrandIds } from "./lib/carBrands";
 import { popularProducts } from "./lib/examples";
-import { siteStats } from "./lib/siteStats";
+import { getSiteStats, type SiteStats } from "./lib/catalog";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -34,12 +34,12 @@ const featuredBrands = featuredBrandIds
 const showcase = products.find((p) => p.id === 1) ?? products[0];
 const showcaseOffers = [...showcase.offers].sort((a, b) => a.price - b.price);
 
-const STATS: {
+const statsOf = (siteStats: SiteStats): {
   art: ReactNode;
   value: number;
   label: string;
   tone: string;
-}[] = [
+}[] => [
   { art: <Boxes3D className="size-full" />, value: siteStats.products, label: "منتج إلكتروني", tone: "from-mint-50 to-white border-mint/30" },
   { art: <Cart3D className="size-full" />, value: siteStats.stores, label: "متجر مرجعي", tone: "from-yellow-50 to-white border-yellow/50" },
   { art: <Car3D className="size-full" />, value: siteStats.carBrands, label: "علامة سيارات", tone: "from-coral-50 to-white border-coral/25" },
@@ -69,7 +69,9 @@ const STEPS: { art: ReactNode; title: string; text: string }[] = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  // في وضع MVP (قاعدة البيانات) تُحسب الأرقام من القاعدة؛ وإلا من البيانات الحالية
+  const STATS = statsOf(await getSiteStats());
   const maxOffer = Math.max(...showcaseOffers.map((o) => o.price));
   const minOffer = Math.min(...showcaseOffers.map((o) => o.price));
 
