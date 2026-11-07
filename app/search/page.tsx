@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import brands from "../data/cars";
+import { brandNameAr } from "../lib/carBrands";
 import { dataSource, getProducts } from "../lib/catalog";
+import type { SearchableCar } from "../lib/search";
 import SearchClient from "./SearchClient";
 
 type PageProps = {
@@ -27,7 +30,26 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const initialQuery = typeof q === "string" ? q : "";
 
   const products = await getProducts();
+  const db = dataSource() === "db";
+  // وضع القاعدة: البحث يشمل موديلات السيارات أيضًا (موديل واحد لكل اسم مع سنواته)
+  const cars: SearchableCar[] = db ? carIndex() : [];
 
   // key يضمن إعادة تهيئة البحث عند تغيّر الرابط من صفحة أخرى
-  return <SearchClient key={initialQuery} initialQuery={initialQuery} products={products} approvedOnly={dataSource() === "db"} />;
+  return <SearchClient key={initialQuery} initialQuery={initialQuery} products={products} cars={cars} approvedOnly={db} />;
+}
+
+function carIndex(): SearchableCar[] {
+  const out: SearchableCar[] = [];
+  for (const [brandId, b] of Object.entries(brands)) {
+    const byName = new Map<string, Set<number>>();
+    for (const m of b.models) {
+      const years = byName.get(m.name) ?? new Set<number>();
+      years.add(m.year);
+      byName.set(m.name, years);
+    }
+    for (const [name, years] of byName) {
+      out.push({ brandId, brandAr: brandNameAr[brandId] ?? b.name, brand: b.name, name, years: [...years].sort() });
+    }
+  }
+  return out;
 }

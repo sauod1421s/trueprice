@@ -7,7 +7,7 @@
  */
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Step = "password" | "mfa";
 type Enroll = { factorId: string; qr: string; secret: string } | null;
@@ -37,6 +37,23 @@ export default function SupabaseLogin({ url, publishableKey, initialStep }: { ur
     setStep("mfa");
     if (data.nextLevel !== "aal2") await startEnroll();
   }
+
+  // فتح الصفحة بجلسة بلا تحقق ثنائي (مثل إعادة التحميل أثناء التسجيل): إن لم يوجد عامل مُفعّل
+  // يظهر رمز QR جديد فورًا، بدل أن يُعاد التسجيل بصمت عند إدخال أول رمز
+  const checked = useRef(false);
+  useEffect(() => {
+    if (step !== "mfa" || enroll || checked.current) return;
+    checked.current = true;
+    void (async () => {
+      try {
+        const factors = await sb.auth.mfa.listFactors();
+        if (!factors.data?.totp.some((f) => f.status === "verified")) await startEnroll();
+      } catch (e) {
+        setError(msg(e));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   async function startEnroll() {
     // تنظيف عوامل غير مكتملة من محاولات سابقة ثم إنشاء عامل TOTP جديد

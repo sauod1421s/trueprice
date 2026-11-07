@@ -47,7 +47,7 @@ def login(page, who):
     page.goto(f"{BASE}/admin")
     if page.get_by_role("button", name="خروج").count():
         page.get_by_role("button", name="خروج").click()
-        expect(page.get_by_text("الدخول إلى لوحة الإدارة (معاينة)")).to_be_visible()
+        expect(page.get_by_role("heading", name="الدخول إلى لوحة الإدارة (معاينة)")).to_be_visible()
     page.locator("li", has_text=who).get_by_role("button", name="دخول").click()
     expect(page.get_by_role("button", name="خروج")).to_be_visible()
 

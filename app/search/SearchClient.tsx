@@ -1,20 +1,24 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Car, Search } from "lucide-react";
+import Link from "next/link";
 import { Boxes3D, Magnifier3D } from "../components/illustrations";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import ProductCard from "../components/ProductCard";
 import { TrustNote } from "../components/ui";
 import type { CatalogProduct } from "../lib/catalog/types";
-import { searchProducts } from "../lib/search";
+import { searchCars, searchProducts, type SearchableCar } from "../lib/search";
 import { TRUST_TEXT } from "../lib/trust";
 
 export default function SearchClient({
   initialQuery = "",
   products,
+  cars = [],
   approvedOnly = false,
 }: {
+  /** موديلات السيارات للبحث (وضع القاعدة فقط) */
+  cars?: SearchableCar[];
   initialQuery?: string;
   /** نسخة MVP: الأسعار المعروضة معتمدة بعد المراجعة فقط */
   approvedOnly?: boolean;
@@ -61,6 +65,8 @@ export default function SearchClient({
       (product) => category === "all" || product.category === category
     );
   }, [products, query, category]);
+
+  const carResults = useMemo(() => (query && category === "all" ? searchCars(cars, query) : []), [cars, query, category]);
 
   const chip = (active: boolean) =>
     `inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm transition-colors ${
@@ -163,7 +169,33 @@ export default function SearchClient({
           </TrustNote>
         )}
 
-        {results.length === 0 ? (
+        {carResults.length > 0 && (
+          <section className="mb-6" aria-label="نتائج السيارات">
+            <h2 className="mb-3 flex items-center gap-2 font-semibold">
+              <Car size={18} className="text-brand-soft" aria-hidden /> سيارات مطابقة
+              <span className="num text-sm font-normal text-ink-3">({carResults.length})</span>
+            </h2>
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {carResults.map((c) => (
+                <li key={`${c.brandId}-${c.name}`}>
+                  <Link
+                    href={`/cars/${c.brandId}`}
+                    className="card card-hover flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                    data-car-result
+                  >
+                    <span>
+                      <span className="font-semibold">{c.brandAr} {c.name}</span>
+                      <span className="block text-xs text-ink-3" dir="ltr">{c.years.join(" · ")}</span>
+                    </span>
+                    <span className="text-xs text-brand-soft">عرض الموديلات ←</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {results.length === 0 && carResults.length > 0 ? null : results.length === 0 ? (
           <div className="card bg-cream-wash flex flex-col items-center px-6 py-10 text-center">
             <div className="relative h-28 w-40" aria-hidden>
               <Boxes3D className="absolute bottom-0 left-0 w-24 opacity-90" />

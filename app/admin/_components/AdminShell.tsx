@@ -13,7 +13,10 @@ const NAV = [
   { href: "/admin/stores", label: "المتاجر والمصادر" },
   { href: "/admin/prices", label: "استيراد الأسعار" },
   { href: "/admin/review", label: "مراجعة الأسعار" },
+  { href: "/admin/requests", label: "الطلبات والشكاوى" },
+  { href: "/admin/analytics", label: "الإحصائيات" },
   { href: "/admin/users", label: "المستخدمون" },
+  { href: "/admin/settings", label: "الإعدادات" },
 ];
 
 export type AdminContext = {

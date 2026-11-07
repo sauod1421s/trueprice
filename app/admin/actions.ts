@@ -21,12 +21,18 @@ import {
   friendlyDbError,
   importLookups,
   removeIdentifier,
+  replyRequest,
   setProductStatus,
+  setRequestStatus,
+  setSiteSetting,
   setRole,
   setSourceStatus,
   stageFeed,
   stageImport,
+  updateProduct,
   upsertProfile,
+  DETAIL_FIELDS,
+  type DetailField,
 } from "../lib/admin/db";
 import { feedSummary, feedToStageRows } from "../lib/admin/feedRows";
 import { draftRow, draftRowsFromCsv, MVP_MAX_BYTES, MVP_MAX_ROWS, type ProductRef } from "../lib/admin/priceRows";
@@ -443,4 +449,72 @@ export async function changeRole(fd: FormData) {
     back("/admin/users", "err", friendlyDbError(e));
   }
   back("/admin/users", "ok", grant ? "مُنح الدور." : "سُحب الدور.");
+}
+
+/* ------------------------------------------------------------------ طلبات التواصل */
+
+const REQUEST_STATUSES = new Set(["new", "in_progress", "answered", "closed", "spam"]);
+
+export async function replyToRequest(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const id = Number(text(fd, "id", 20));
+  const body = text(fd, "body", 4001);
+  const isPublic = text(fd, "visibility", 10) === "public";
+  const path = `/admin/requests/${Number.isSafeInteger(id) && id > 0 ? id : 0}`;
+  if (!Number.isSafeInteger(id) || id <= 0) back("/admin/requests", "err", "الطلب غير موجود");
+  if (!body) back(path, "err", "اكتب الرد أولًا");
+  try {
+    await replyRequest(claims, id, body, isPublic);
+  } catch (e) {
+    back(path, "err", friendlyDbError(e));
+  }
+  back(path, "ok", isPublic ? "أُرسل الرد، ويظهر للمرسل في صفحة المتابعة." : "حُفظت الملاحظة الداخلية (لا تظهر للمرسل).");
+}
+
+export async function changeRequestStatus(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const id = Number(text(fd, "id", 20));
+  const status = text(fd, "status", 20);
+  const path = `/admin/requests/${Number.isSafeInteger(id) && id > 0 ? id : 0}`;
+  if (!Number.isSafeInteger(id) || id <= 0 || !REQUEST_STATUSES.has(status)) back("/admin/requests", "err", "طلب غير صالح");
+  try {
+    await setRequestStatus(claims, id, status);
+  } catch (e) {
+    back(path, "err", friendlyDbError(e));
+  }
+  back(path, "ok", "حُدّثت حالة الطلب.");
+}
+
+/* ------------------------------------------------------------------ إعدادات التواصل */
+
+export async function saveContactSettings(fd: FormData) {
+  const claims = await claimsOrLogin();
+  try {
+    await setSiteSetting(claims, "contact_email", text(fd, "contact_email", 254));
+    await setSiteSetting(claims, "contact_whatsapp", text(fd, "contact_whatsapp", 30));
+  } catch (e) {
+    back("/admin/settings", "err", friendlyDbError(e));
+  }
+  back("/admin/settings", "ok", "حُفظت بيانات التواصل. تظهر في صفحة التواصل فقط عند ضبطها.");
+}
+
+/* ------------------------------------------------------------------ تعديل منتج */
+
+export async function editProduct(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const id = Number(text(fd, "id", 20));
+  const path = `/admin/catalog/${Number.isSafeInteger(id) && id > 0 ? id : 0}`;
+  if (!Number.isSafeInteger(id) || id <= 0) back("/admin/catalog", "err", "المنتج غير موجود");
+  const name = text(fd, "name", 500);
+  const nameAr = text(fd, "nameAr", 500);
+  if (name.length < 2) back(path, "err", "الاسم الإنجليزي مطلوب");
+  const details: Partial<Record<DetailField, string | null>> = {};
+  for (const k of Object.keys(DETAIL_FIELDS) as DetailField[]) details[k] = text(fd, k, k === "screen" || k === "chip" ? 300 : 120) || null;
+  const colors = text(fd, "colors", 400).split(/[,،]/).map((x) => x.trim()).filter(Boolean).slice(0, 20);
+  try {
+    await updateProduct(claims, id, { name, nameAr: nameAr || null, description: text(fd, "description", 4000) || null, colors, details });
+  } catch (e) {
+    back(path, "err", friendlyDbError(e));
+  }
+  back(path, "ok", "حُفظت بيانات المنتج. الأسعار وسجلها لم تتغير.");
 }

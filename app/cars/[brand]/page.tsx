@@ -254,6 +254,15 @@ export default async function Page({
             ))}
           </ul>
         </section>
+
+        {dataSource() === "db" && (
+          <Link
+            href={`/contact?kind=price_error&ref=${encodeURIComponent(`/cars/${brandId}`)}`}
+            className="mt-4 flex min-h-11 items-center justify-center rounded-[var(--radius-card)] border border-line bg-surface px-4 text-sm text-ink-2 hover:border-brand hover:text-brand"
+          >
+            رأيت سعرًا مختلفًا لإحدى سيارات {nameAr}؟ أبلغ عن خطأ في السعر
+          </Link>
+        )}
       </div>
     </main>
   );

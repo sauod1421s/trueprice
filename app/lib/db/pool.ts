@@ -35,25 +35,40 @@ export type DbClaims = { sub: string; aal: "aal1" | "aal2" };
 
 async function inTransaction<T>(setup: (c: PoolClient) => Promise<void>, fn: (c: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool().connect();
+  let result: T;
   try {
     // ذهاب واحد إلى القاعدة: بدء المعاملة + حدودها (بروتوكول الاستعلام البسيط يقبل عدة أوامر)
     await client.query(["begin", ...TRANSACTION_SETTINGS].join("; "));
     await setup(client);
-    const result = await fn(client);
+    result = await fn(client);
     await client.query("commit");
-    return result;
   } catch (e) {
-    await client.query("rollback").catch(() => undefined);
+    let broken = false;
+    await client.query("rollback").catch(() => {
+      broken = true;
+    });
+    // اتصال منقطع لا يعود للمجموعة (يُستبدل باتصال جديد في الطلب التالي)
+    client.release(broken);
     throw e;
-  } finally {
-    client.release();
   }
+  client.release();
+  return result;
 }
 
 /** قراءة الموقع العام: web_reader، قراءة فقط */
 export function withPublic<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
   return inTransaction(async (c) => {
     await c.query("set transaction read only");
+    await c.query("set local role web_reader");
+  }, fn);
+}
+
+/**
+ * كتابة الموقع العام (تسجيل مشاهدة، إرسال طلب تواصل): web_reader أيضًا، ولا يملك أي صلاحية
+ * كتابة على الجداول — يستطيع فقط تنفيذ دوال pub المحددة التي تتحقق من المدخلات بنفسها.
+ */
+export function withPublicWrite<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
+  return inTransaction(async (c) => {
     await c.query("set local role web_reader");
   }, fn);
 }

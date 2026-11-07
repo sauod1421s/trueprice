@@ -212,3 +212,29 @@ export function searchProducts<T extends SearchableProduct>(
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((x) => x.p);
 }
+
+/* ------------------------------------------------------------------ السيارات في البحث */
+
+export type SearchableCar = { brandId: string; brandAr: string; brand: string; name: string; years: number[] };
+
+/** موديلات السيارات المطابقة (كل كلمة يجب أن تطابق العلامة أو الموديل أو السنة) */
+export function searchCars<T extends SearchableCar>(cars: T[], query: string, limit = 12): T[] {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return [];
+  const scored: { c: T; score: number; index: number }[] = [];
+  cars.forEach((c, index) => {
+    const nameT = [...tokenize(c.name)];
+    const brandT = [...tokenize(c.brand), ...tokenize(c.brandAr), ...tokenize(c.brandId)];
+    const yearT = c.years.map(String);
+    const all = [...nameT, ...brandT, ...yearT];
+    let score = 0;
+    for (const q of tokens) {
+      const isNumber = /^\d+$/.test(q);
+      const matches = (t: string) => (isNumber ? t === q : t.startsWith(q));
+      if (!all.some(matches)) return;
+      score += nameT.some(matches) ? 2 : 1;
+    }
+    scored.push({ c, score, index });
+  });
+  return scored.sort((a, b) => b.score - a.score || a.index - b.index).slice(0, limit).map((x) => x.c);
+}

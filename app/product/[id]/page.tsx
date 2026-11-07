@@ -527,6 +527,16 @@ export default async function ProductPage({ params }: PageProps) {
             value={getMainStore(product)}
           />
         </div>
+
+        {/* وضع القاعدة: البلاغ يُحفظ فعليًا برقم مرجعي ويصل للوحة الإدارة */}
+        {isDb && (
+          <Link
+            href={`/contact?kind=price_error&ref=${product.id}`}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-card)] border border-line bg-surface px-4 text-sm text-ink-2 hover:border-brand hover:text-brand"
+          >
+            رأيت سعرًا مختلفًا؟ أبلغ عن خطأ في السعر
+          </Link>
+        )}
       </>
     );
   }

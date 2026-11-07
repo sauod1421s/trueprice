@@ -711,6 +711,11 @@ export function friendlyDbError(e: unknown): string {
   if (msg.includes("user must exist in Supabase Auth")) return "هذا المعرّف غير موجود في Supabase Auth. أنشئ الحساب أولًا من لوحة Supabase.";
   if (msg.includes("display name must be")) return "الاسم المعروض مطلوب (من 2 إلى 120 حرفًا).";
   if (msg.includes("role not assigned")) return "هذا الدور غير ممنوح لهذا المستخدم.";
+  if (msg.includes("invalid email")) return "البريد الإلكتروني غير صحيح.";
+  if (msg.includes("invalid whatsapp")) return "رقم الواتساب بالصيغة الدولية فقط، مثال: ‎+9665XXXXXXXX";
+  if (msg.includes("reply must be")) return "الرد مطلوب (حتى 4000 حرف).";
+  if (msg.includes("request not found")) return "الطلب غير موجود.";
+  if (msg.includes("aal2") || msg.includes("mfa")) return "هذه العملية تتطلب التحقق الثنائي.";
   if (code === "23505") return "القيمة موجودة مسبقًا (المعرّف مستخدم).";
   if (code === "23514" && msg.includes("rejection")) return "الرفض يتطلب ملاحظة.";
   if (code === "23514") return "قيمة غير مقبولة: تحقق من الحقول (المعرّف بأحرف لاتينية صغيرة وشرطة، والروابط تبدأ بـ https://).";
@@ -738,4 +743,168 @@ export async function setRole(claims: DbClaims, userId: string, role: string, gr
   await withClaims(claims, (c) =>
     c.query(grant ? "select admin_api.grant_role($1, $2)" : "select admin_api.revoke_role($1, $2)", [userId, role])
   );
+}
+
+/* ------------------------------------------------------------------ إحصائيات الزوار */
+
+export type VisitorStats = {
+  from: string;
+  to: string;
+  totals: { pageviews: number; daily_unique_visitors_sum: number; visits: number };
+  daily: { day: string; pageviews: number; visitors: number; visits: number }[];
+  top_pages: { path: string; n: number }[];
+  top_products: { ref_id: string; n: number; name: string | null }[];
+  top_cars: { ref_id: string; n: number; name: string | null }[];
+  top_searches: { q: string; n: number }[];
+  referrers: { host: string; n: number }[];
+  devices: { device: string; n: number }[];
+};
+
+export async function visitorStats(claims: DbClaims, days: number): Promise<VisitorStats> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ v: VisitorStats }>(`select admin_api.visitor_stats($1) as v`, [days]);
+    const v = r.rows[0].v;
+    const num = (x: unknown) => Number(x) || 0;
+    return {
+      ...v,
+      totals: {
+        pageviews: num(v.totals.pageviews),
+        daily_unique_visitors_sum: num(v.totals.daily_unique_visitors_sum),
+        visits: num(v.totals.visits),
+      },
+      daily: v.daily.map((d) => ({ day: d.day, pageviews: num(d.pageviews), visitors: num(d.visitors), visits: num(d.visits) })),
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ طلبات التواصل */
+
+export type RequestRow = {
+  id: number; reference: string; kind: string; status: string; subject: string;
+  createdAt: string; updatedAt: string; hasContact: boolean; replies: number;
+};
+
+export async function listRequests(
+  claims: DbClaims,
+  filter: { status?: string | null; kind?: string | null }
+): Promise<{ rows: RequestRow[]; counts: Record<string, number> }> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{
+      id: string; reference: string; kind: string; status: string; subject: string; created_at: Date; updated_at: Date;
+      has_contact: boolean; replies: number;
+    }>(`select * from admin_api.list_requests($1, $2, 200)`, [filter.status ?? null, filter.kind ?? null]);
+    const counts = await c.query<{ status: string; n: number }>(`select * from admin_api.request_counts()`);
+    return {
+      rows: r.rows.map((x) => ({
+        id: Number(x.id), reference: x.reference, kind: x.kind, status: x.status, subject: x.subject,
+        createdAt: x.created_at.toISOString(), updatedAt: x.updated_at.toISOString(), hasContact: x.has_contact, replies: x.replies,
+      })),
+      counts: Object.fromEntries(counts.rows.map((x) => [x.status, x.n])),
+    };
+  });
+}
+
+export type RequestDetail = {
+  id: number; reference: string; kind: string; status: string; name: string | null; email: string | null;
+  phone: string | null; subject: string; message: string; related_ref: string | null; created_at: string; updated_at: string;
+  replies: { id: number; body: string; is_public: boolean; at: string; author: string | null }[];
+};
+
+export async function requestDetail(claims: DbClaims, id: number): Promise<RequestDetail | null> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ v: RequestDetail | null }>(`select admin_api.request_detail($1) as v`, [id]);
+    return r.rows[0]?.v ?? null;
+  });
+}
+
+export async function setRequestStatus(claims: DbClaims, id: number, status: string): Promise<void> {
+  await withClaims(claims, (c) => c.query(`select admin_api.set_request_status($1, $2)`, [id, status]));
+}
+
+export async function replyRequest(claims: DbClaims, id: number, body: string, isPublic: boolean): Promise<void> {
+  await withClaims(claims, (c) => c.query(`select admin_api.reply_request($1, $2, $3)`, [id, body, isPublic]));
+}
+
+/* ------------------------------------------------------------------ إعدادات التواصل */
+
+export async function siteSettings(claims: DbClaims): Promise<Record<string, { value: string; updatedAt: string }>> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ key: string; value: string; updated_at: Date }>(`select * from admin_api.site_settings()`);
+    return Object.fromEntries(r.rows.map((x) => [x.key, { value: x.value, updatedAt: x.updated_at.toISOString() }]));
+  });
+}
+
+export async function setSiteSetting(claims: DbClaims, key: "contact_email" | "contact_whatsapp", value: string): Promise<void> {
+  await withClaims(claims, (c) => c.query(`select admin_api.set_site_setting($1, $2)`, [key, value]));
+}
+
+/* ------------------------------------------------------------------ تعديل منتج */
+
+export const DETAIL_FIELDS = {
+  storage: "التخزين",
+  memory: "الذاكرة",
+  screen: "الشاشة",
+  chip: "المعالج",
+  camera: "الكاميرا الخلفية",
+  front_camera: "الكاميرا الأمامية",
+  battery: "البطارية",
+  connectivity: "الاتصال",
+  water_resistance: "مقاومة الماء",
+  refresh_rate: "معدل التحديث",
+} as const;
+export type DetailField = keyof typeof DETAIL_FIELDS;
+
+export type EditableProduct = {
+  id: number; publicId: number; name: string; nameAr: string | null; status: string; brand: string; category: string;
+  details: Partial<Record<DetailField, string | null>> & { description: string | null; colors: string[]; is_demo: boolean };
+};
+
+export async function productForEdit(claims: DbClaims, id: number): Promise<EditableProduct | null> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{
+      id: string; legacy_id: number | null; name: string; name_ar: string | null; status: string; brand: string; category: string;
+    }>(
+      `select p.id, p.legacy_id, p.name, p.name_ar, p.status::text, b.name as brand, cat.name_ar as category
+       from admin_api.products p join admin_api.brands b on b.id = p.brand_id join admin_api.categories cat on cat.id = p.category_id
+       where p.id = $1 and p.category_kind = 'electronics'`,
+      [id]
+    );
+    const p = r.rows[0];
+    if (!p) return null;
+    const d = await c.query<Record<string, unknown>>(`select * from admin_api.product_details where product_id = $1`, [id]);
+    const row = d.rows[0] ?? {};
+    const details: EditableProduct["details"] = {
+      description: (row.description as string | null) ?? null,
+      colors: (row.colors as string[] | undefined) ?? [],
+      is_demo: Boolean(row.is_demo),
+    };
+    for (const k of Object.keys(DETAIL_FIELDS) as DetailField[]) details[k] = (row[k] as string | null) ?? null;
+    return {
+      id: Number(p.id), publicId: publicIdOf(Number(p.id), p.legacy_id), name: p.name, nameAr: p.name_ar,
+      status: p.status, brand: p.brand, category: p.category, details,
+    };
+  });
+}
+
+/** يعدّل الاسم والمواصفات فقط (لا يمس الأسعار أو سجلها). كل حقل فارغ = غير محدد. */
+export async function updateProduct(
+  claims: DbClaims,
+  id: number,
+  input: { name: string; nameAr: string | null; description: string | null; colors: string[]; details: Partial<Record<DetailField, string | null>> }
+): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const u = await c.query(
+      `update tp.products set name = $2, name_ar = $3 where id = $1 and category_kind = 'electronics'`,
+      [id, input.name, input.nameAr]
+    );
+    if (u.rowCount !== 1) throw new Error("المنتج غير موجود");
+    const keys = Object.keys(DETAIL_FIELDS) as DetailField[];
+    const cols = [...keys, "description", "colors"];
+    const vals = [...keys.map((k) => input.details[k] ?? null), input.description, input.colors];
+    await c.query(
+      `insert into tp.product_details (product_id, ${cols.join(", ")}) values ($1, ${cols.map((_, i) => `$${i + 2}`).join(", ")})
+       on conflict (product_id) do update set ${cols.map((k) => `${k} = excluded.${k}`).join(", ")}`,
+      [id, ...vals]
+    );
+  });
 }

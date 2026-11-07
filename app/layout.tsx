@@ -9,6 +9,9 @@ import SiteFooter from "./components/SiteFooter";
 import SiteHeader from "./components/SiteHeader";
 import { IllustrationDefs } from "./components/illustrations";
 import { SITE_URL } from "./lib/site";
+import { Suspense } from "react";
+import AnalyticsBeacon from "./components/AnalyticsBeacon";
+import { dataSource } from "./lib/catalog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -76,7 +79,13 @@ export default function RootLayout({
         <SiteHeader />
         <div className="flex-1">{children}</div>
 
-        <SiteFooter />
+        <SiteFooter interactive={dataSource() === "db"} />
+        {/* إحصائيات الزوار (وضع القاعدة فقط): بلا ملفات تعريف، وتُستبعد الزيارات الآلية */}
+        {dataSource() === "db" && (
+          <Suspense fallback={null}>
+            <AnalyticsBeacon />
+          </Suspense>
+        )}
       </body>
     </html>
   );

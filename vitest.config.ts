@@ -8,7 +8,10 @@ export default defineConfig({
     environment: "node",
     coverage: {
       provider: "v8",
-      include: ["app/lib/ingest/**/*.ts", "app/lib/auth/**/*.ts", "app/lib/valuation/**/*.ts"],
+      include: [
+        "app/lib/ingest/**/*.ts", "app/lib/auth/**/*.ts", "app/lib/valuation/**/*.ts",
+        "app/lib/analytics/**/*.ts", "app/lib/support/validate.ts", "app/lib/admin/feedRows.ts",
+      ],
       reporter: ["text-summary", "text"],
       // حد أدنى يفشل CI تحته
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 80 },

@@ -109,8 +109,11 @@ export default async function CatalogPage({ searchParams }: Props) {
                   <tr key={p.id}>
                     <td className="num px-4 py-2 text-ink-3">{p.publicId}</td>
                     <td className="px-4 py-2">
-                      <Link href={`/product/${p.publicId}`} className="font-medium hover:text-brand-soft">{p.nameAr}</Link>
+                      <Link href={`/admin/catalog/${p.id}`} className="font-medium hover:text-brand-soft" title="تعديل الاسم والمواصفات">{p.nameAr}</Link>
                       {p.isDemo && <Badge tone="coral" className="mr-2">تجريبي</Badge>}
+                      {p.status === "active" && (
+                        <Link href={`/product/${p.publicId}`} className="mr-2 text-xs text-ink-3 underline hover:text-ink">في الموقع</Link>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-ink-2">{p.brand}</td>
                     <td className="px-4 py-2 text-ink-2">{p.category}</td>

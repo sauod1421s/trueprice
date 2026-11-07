@@ -21,18 +21,26 @@ const LINKS = [
   },
 ];
 
-export default function SiteFooter() {
+const CONTACT_LINKS = [
+  { href: "/contact", label: "تواصل معنا" },
+  { href: "/contact?kind=price_error", label: "الإبلاغ عن خطأ في سعر" },
+  { href: "/track", label: "متابعة طلب" },
+];
+
+/** interactive = وضع القاعدة: نماذج التواصل والمتابعة تعمل فعليًا، فتظهر روابطها */
+export default function SiteFooter({ interactive = false }: { interactive?: boolean }) {
+  const groups = interactive ? [...LINKS, { title: "التواصل", items: CONTACT_LINKS }] : LINKS;
   return (
     <footer className="theme-forest bg-hero relative mt-auto overflow-hidden">
       <div className="bg-dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
-      <div className="pointer-events-none absolute left-10 top-10 hidden w-24 opacity-90 lg:block" aria-hidden>
+      <div className={`pointer-events-none absolute left-10 top-10 hidden w-24 opacity-90 ${interactive ? "xl:hidden" : "lg:block"}`} aria-hidden>
         <PriceTag3D className="float-slow w-full" />
       </div>
-      <div className="pointer-events-none absolute left-40 top-24 hidden w-16 opacity-80 lg:block" aria-hidden>
+      <div className={`pointer-events-none absolute left-40 top-24 hidden w-16 opacity-80 ${interactive ? "xl:hidden" : "lg:block"}`} aria-hidden>
         <Coins3D className="float w-full" />
       </div>
       <div className="container-page relative py-10 sm:py-12">
-        <div className="grid grid-cols-2 gap-8 lg:grid-cols-[2fr_1fr_1fr]">
+        <div className={`grid grid-cols-2 gap-8 ${interactive ? "lg:grid-cols-[2fr_1fr_1fr_1fr]" : "lg:grid-cols-[2fr_1fr_1fr]"}`}>
           <div className="col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2.5">
               <LogoMark className="size-8" />
@@ -47,7 +55,7 @@ export default function SiteFooter() {
             </p>
           </div>
 
-          {LINKS.map((group) => (
+          {groups.map((group) => (
             <nav key={group.title} aria-label={group.title}>
               <h2 className="mb-3 text-sm font-semibold text-ink">{group.title}</h2>
               <ul className="space-y-1">
