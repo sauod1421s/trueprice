@@ -206,6 +206,69 @@ async function main() {
     ok(fs1 === fs2, "«Run and enable RLS»: البنية والصلاحيات مطابقة تمامًا للتشغيل العادي (لا يضيف حماية جديدة)");
     await withClient("postgres", SU_PW, "postgres", (c) => c.query("drop database v_studio"));
 
+    // 3د) ما خارج نطاق TruePrice: لقطة قبل/بعد على قاعدة تحاكي مشروعنا (مخطط tp_migrate بثلاثة أجزاء نصية،
+    //     ومحتوى سابق في public، وحسابات auth.users). المسموح تغيّره فقط: الأدوار الجديدة وعضوياتها، صلاحية
+    //     الاتصال لـ tp_app، تشديد الامتيازات الافتراضية لدور الترحيل، وحاوية imports الخاصة وسياستاها.
+    await freshDb("v_scope");
+    await su("v_scope", `insert into auth.users (id, email) values ('00000000-0000-4000-8000-00000000f001', 'scope@test.invalid')`);
+    await withClient("supa_postgres", MIG_PW, "v_scope", (c) => c.query(`
+      create schema tp_migrate;
+      create table tp_migrate.chunks (file text, n int, body text, added_at timestamptz default now(), primary key (file, n));
+      alter table tp_migrate.chunks enable row level security;
+      revoke all on schema tp_migrate from public, anon, authenticated, service_role;
+      revoke all on tp_migrate.chunks from public, anon, authenticated, service_role;
+      insert into tp_migrate.chunks (file, n, body) select '001', g, repeat(md5(g::text), 500) from generate_series(1, 3) g;
+      create table public.preexisting (id int primary key);
+      create function public.preexisting_fn() returns int language sql as 'select 1';`));
+    const SNAP = `
+      select 'tp_migrate.data ' || md5(string_agg(file || n || body, '|' order by file, n)) from tp_migrate.chunks
+      union all select 'tp_migrate.acl ' || coalesce(array_to_string(relacl, ','), '-') || ' rls=' || relrowsecurity
+        from pg_class where oid = 'tp_migrate.chunks'::regclass
+      union all select 'tp_migrate.schema_acl ' || coalesce(array_to_string(nspacl, ','), '-') from pg_namespace where nspname = 'tp_migrate'
+      union all select 'public.rel ' || relname || ' ' || relkind::text || ' ' || coalesce(array_to_string(relacl, ','), '-')
+        from pg_class where relnamespace = 'public'::regnamespace
+      union all select 'public.fn ' || proname || ' ' || coalesce(array_to_string(proacl, ','), '-')
+        from pg_proc where pronamespace = 'public'::regnamespace
+      union all select 'auth.users ' || md5(string_agg(id::text || coalesce(email, ''), '|' order by id)) from auth.users
+      union all select 'default_acl ' || pg_get_userbyid(d.defaclrole) || ' ' || coalesce(n.nspname, '*') || ' ' || d.defaclobjtype::text
+                       || ' ' || coalesce(array_to_string(d.defaclacl, ','), '-')
+        from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
+        where n.nspname is null or n.nspname not in ('tp', 'pub', 'admin_api', 'ingest_api')
+      union all select 'member ' || r.rolname || ' -> ' || m.rolname || case when a.admin_option then ' (admin)' else '' end
+        from pg_auth_members a join pg_roles r on r.oid = a.roleid join pg_roles m on m.oid = a.member
+      union all select 'database_acl ' || coalesce(array_to_string(datacl, ','), '-') from pg_database where datname = current_database()
+      union all select 'storage.bucket ' || id || ' public=' || public from storage.buckets
+      union all select 'storage.policy ' || policyname from pg_policies where schemaname = 'storage'
+      union all select 'schema ' || nspname from pg_namespace where nspname not like 'pg\\_%' and nspname <> 'information_schema'`;
+    const snap = async () => new Set((await su("v_scope", SNAP)).rows.map((x) => Object.values(x)[0]));
+    const before = await snap();
+    r = await runSetup("v_scope");
+    // فاحص الصلاحيات صارم على القاعدة كلها: يبلّغ عن الدالة السابقة في public (قابلة للتنفيذ من anon) لكنه لا يعدّلها.
+    // في مشروعنا الحقيقي public فارغ (0 دوال، فُحص) فالنتيجة هناك 0.
+    const vio = r.ok ? (await su("v_scope", "select kind, object from tp.privilege_violations()")).rows : [];
+    ok(r.ok && vio.length === 1 && vio[0].object === "public.preexisting_fn()",
+       "على قاعدة فيها tp_migrate ومحتوى سابق: الإعداد ينجح (والفاحص يبلّغ فقط عن دالة public السابقة دون تعديلها)",
+       r.ok ? JSON.stringify(vio) : r.error);
+    const after = await snap();
+    const removed = [...before].filter((x) => !after.has(x));
+    const added = [...after].filter((x) => !before.has(x));
+    const keep = (prefix) => [...before].filter((x) => x.startsWith(prefix)).every((x) => after.has(x));
+    ok(keep("tp_migrate."), "tp_migrate: الأجزاء الثلاثة وصلاحياتها وRLS كما هي تمامًا");
+    ok(keep("public.") && keep("auth.users"), "public وauth.users: بلا أي تغيير");
+    const ourRoles = /(tp_owner|web_reader|ingest_service|tp_app)/;
+    const allowedAdded = (x) =>
+      (x.startsWith("member ") && ourRoles.test(x)) || x.startsWith("database_acl ") || x.startsWith("default_acl supa_postgres ") || x.startsWith("default_acl tp_owner ") ||
+      x === "storage.bucket imports public=false" || x === "storage.policy tp_imports_insert" || x === "storage.policy tp_imports_read" ||
+      ["schema tp", "schema pub", "schema admin_api", "schema ingest_api"].includes(x);
+    const allowedRemoved = (x) => x.startsWith("database_acl ") || x.startsWith("default_acl supa_postgres ");
+    ok(added.every(allowedAdded) && removed.every(allowedRemoved), "خارج النطاق: لا تغيير إلا المتوقع (أدوار المشروع، اتصال tp_app، تشديد افتراضي، حاوية imports)",
+       [...removed.filter((x) => !allowedRemoved(x)).map((x) => "- " + x), ...added.filter((x) => !allowedAdded(x)).map((x) => "+ " + x)].join(" | "));
+    console.log("    تغييرات خارج مخططات TruePrice:");
+    for (const x of removed) console.log("      - " + x);
+    for (const x of added) console.log("      + " + x);
+    console.log("      (database_acl بعد: " + [...after].filter((x) => x.startsWith("database_acl")).join() + ")");
+    await withClient("postgres", SU_PW, "postgres", (c) => c.query("drop database v_scope"));
+
     // 4) إعادة التشغيل
     const audit1 = await su("v_two", "select count(*) as n from tp.products");
     r = await runSetup("v_two");
