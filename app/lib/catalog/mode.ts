@@ -1,3 +1,4 @@
+import { withPreviewDefaults } from "../previewDefaults";
 import type { DataSource } from "./types";
 
 /**
@@ -6,7 +7,8 @@ import type { DataSource } from "./types";
  * - "db": نسخة MVP المحلية — المنتجات والأسعار من قاعدة البيانات.
  */
 export function dataSource(): DataSource {
-  return process.env.TP_DATA_SOURCE === "db" && process.env.DATABASE_URL ? "db" : "static";
+  const env = withPreviewDefaults(process.env);
+  return env.TP_DATA_SOURCE === "db" && env.DATABASE_URL ? "db" : "static";
 }
 
 /**

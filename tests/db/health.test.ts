@@ -9,11 +9,11 @@ describe("classifyDbError — رموز تشخيص بلا أسرار", () => {
     expect(classifyDbError(new DbConfigError("DATABASE_URL غير صالح"))).toBe("config");
     let thrown: unknown;
     try {
-      poolConfig({ DATABASE_URL: "postgresql://tp_app.ref:pw@aws-1-eu-central-1.pooler.supabase.com:6543/postgres" });
+      poolConfig({ DATABASE_URL: "not a url" });
     } catch (e) {
       thrown = e;
     }
-    expect(classifyDbError(thrown)).toBe("config"); // بلا DATABASE_CA_CERT
+    expect(classifyDbError(thrown)).toBe("config");
   });
   it("الشبكة والمهلة", () => {
     expect(classifyDbError(pgErr("ENOTFOUND"))).toBe("dns");

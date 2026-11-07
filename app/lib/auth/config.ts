@@ -7,6 +7,8 @@
  * المفتاح العام فقط (publishable/anon) يُسمح به هنا. أي مفتاح سري أو service_role في متغير عام
  * يُرفض ويُعطّل الدخول، حتى لا يُرسل إلى المتصفح خطأً.
  */
+import { withPreviewDefaults } from "../previewDefaults";
+
 export type AuthMode = "supabase" | "local-preview" | "off";
 
 export type SupabasePublicConfig = { url: string; key: string };
@@ -29,7 +31,8 @@ export function isSecretSupabaseKey(key: string): boolean {
   return payload?.role === "service_role";
 }
 
-export function supabasePublicConfig(env: Record<string, string | undefined> = process.env): SupabasePublicConfig | null {
+export function supabasePublicConfig(rawEnv: Record<string, string | undefined> = process.env): SupabasePublicConfig | null {
+  const env = withPreviewDefaults(rawEnv);
   const url = (env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
   const key = (env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
   if (!url || !key) return null;
@@ -38,7 +41,8 @@ export function supabasePublicConfig(env: Record<string, string | undefined> = p
   return { url, key };
 }
 
-export function authMode(env: Record<string, string | undefined> = process.env): AuthMode {
+export function authMode(rawEnv: Record<string, string | undefined> = process.env): AuthMode {
+  const env = withPreviewDefaults(rawEnv);
   const dbMode = env.TP_DATA_SOURCE === "db";
   if (dbMode && env.TP_PREVIEW_AUTH === "on" && !env.VERCEL && (env.TP_PREVIEW_SESSION_SECRET ?? "").length >= 32) {
     return "local-preview";

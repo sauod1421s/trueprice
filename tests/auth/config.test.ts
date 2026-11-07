@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { authMode, isSecretSupabaseKey, supabasePublicConfig } from "@/app/lib/auth/config";
+import { createHash, X509Certificate } from "node:crypto";
 import { DbConfigError, poolConfig, TRANSACTION_SETTINGS } from "@/app/lib/db/connection";
+import roots from "@/app/lib/db/supabase-root-cas.json";
 
 /** رمز JWT غير موقّع بحمولة معيّنة (لاختبار كشف المفاتيح فقط) */
 const jwt = (payload: Record<string, unknown>) =>
@@ -69,18 +71,42 @@ describe("اتصال القاعدة", () => {
     expect(c.application_name).toBe("trueprice");
   });
 
-  it("بعيدًا: يشترط شهادة Supabase ويتحقق من هوية الخادم دائمًا", () => {
-    const remote = "postgresql://tp_app.ref:pw@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require&sslrootcert=x";
-    expect(() => poolConfig({ DATABASE_URL: remote })).toThrow(DbConfigError);
-    const c = poolConfig({ DATABASE_URL: remote, DATABASE_CA_CERT: CA });
-    expect(c.ssl).toEqual({
-      ca: "-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----",
-      rejectUnauthorized: true,
-      servername: "aws-0-eu-central-1.pooler.supabase.com",
-    });
+  it("بعيدًا: تحقق كامل دائمًا — شهادات Supabase الجذرية المضمّنة + جذور النظام + شهادة إضافية اختيارية", () => {
+    const remote = "postgresql://tp_app.ref:pw@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require&sslrootcert=x";
+    const c = poolConfig({ DATABASE_URL: remote });
+    const ssl = c.ssl as { ca: string[]; rejectUnauthorized: boolean; servername: string };
+    expect(ssl.rejectUnauthorized).toBe(true);
+    expect(ssl.servername).toBe("aws-1-eu-central-1.pooler.supabase.com");
+    expect(ssl.ca.filter((p) => roots.certs.some((r) => r.pem === p))).toHaveLength(2);
+    expect(ssl.ca.length).toBeGreaterThan(50); // جذور النظام مضافة لا مستبدلة
     // معاملات SSL في الرابط تُحذف حتى لا تتغلب على التحقق
     expect(c.connectionString).not.toMatch(/ssl/);
     expect(c.max).toBe(3);
+
+    const withExtra = poolConfig({ DATABASE_URL: remote, DATABASE_CA_CERT: CA }).ssl as { ca: string[] };
+    expect(withExtra.ca[0]).toBe("-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----");
+    expect(() => poolConfig({ DATABASE_URL: remote, DATABASE_CA_CERT: "not a cert" })).toThrow(DbConfigError);
+
+    // خادم بعيد غير Supabase: جذور النظام فقط، والتحقق يبقى كاملًا
+    const other = poolConfig({ DATABASE_URL: "postgresql://u:p@db.example.com:5432/x" }).ssl as { ca: string[]; rejectUnauthorized: boolean };
+    expect(other.rejectUnauthorized).toBe(true);
+    expect(other.ca.some((p) => roots.certs.some((r) => r.pem === p))).toBe(false);
+  });
+
+  it("الشهادات الجذرية المضمّنة: شهادتا Supabase العامتان كما في مستودع Supabase الرسمي", () => {
+    const fp = (pem: string) =>
+      createHash("sha256").update(Buffer.from(pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, ""), "base64")).digest("hex");
+    expect(roots.certs.map((c) => fp(c.pem))).toEqual([
+      "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
+      "5f9b77951a7aa1303f9b58eea9bfa89e358cfdc15f9786ff10d4930a722c9ae2",
+    ]);
+    for (const c of roots.certs) {
+      const x = new X509Certificate(c.pem);
+      expect(x.subject).toMatch(/O=Supabase Inc/);
+      expect(x.checkIssued(x)).toBe(true); // جذر موقّع ذاتيًا
+      expect(x.ca).toBe(true);
+      expect(new Date(x.validTo).getTime()).toBeGreaterThan(Date.parse("2031-01-01"));
+    }
   });
 
   it("يحد حجم المجموعة بين 1 و 10، ويرفض الروابط غير الصالحة", () => {

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withPreviewDefaults } from "./app/lib/previewDefaults";
 
 /**
  * رؤوس الأمان لكل الصفحات (HTTPS يفرضه المضيف؛ HSTS يمنع الرجوع إلى HTTP).
@@ -11,7 +12,7 @@ const isDev = process.env.NODE_ENV === "development";
 
 function supabaseOrigin(): string {
   try {
-    const u = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const u = withPreviewDefaults(process.env).NEXT_PUBLIC_SUPABASE_URL;
     return u ? new URL(u).origin : "";
   } catch {
     return "";

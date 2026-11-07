@@ -3,8 +3,7 @@
 هذا الدليل لصاحب المشروع. كل الخطوات من موقع Supabase في المتصفح. أسماء القوائم قد تختلف قليلًا مع تحديثات
 Supabase؛ المهم هو الإعداد نفسه. **لا تشارك أي كلمة مرور أو مفتاح سري في المحادثة أو في GitHub.**
 
-> الترتيب: الخطوات 1–3 ← تشغيل `db/supabase/setup_all.sql` مرة واحدة (3ب) ← الشهادة (4) ← متغيرات المعاينة على
-> Vercel (7). خطة القاعدة وما يحتويه الملف: `docs/supabase-production-plan.md`.
+> الترتيب: الخطوات 1–3 ← تشغيل `db/supabase/setup_all.sql` مرة واحدة (3ب) ← متغير واحد على Vercel (7). خطة القاعدة وما يحتويه الملف: `docs/supabase-production-plan.md`.
 
 ## 1) إغلاق التسجيل الذاتي
 
@@ -46,21 +45,28 @@ Supabase؛ المهم هو الإعداد نفسه. **لا تشارك أي كل�
 **Project Settings → Database → SSL Configuration**
 
 - فعّل **Enforce SSL on incoming connections**.
-- اضغط **Download certificate**: هذا الملف هو قيمة `DATABASE_CA_CERT` (ليس سرًا، لكنه يمنع أي خادم مزيف).
+- الشهادة الجذرية العامة مضمّنة في الكود (لا حاجة لتحميلها). `DATABASE_CA_CERT` اختياري لشهادة إضافية فقط.
 
 **Project Settings → Database → Network Restrictions** (اختياري): اتركه مفتوحًا حتى الربط مع Vercel، لأن عناوين
 Vercel متغيرة في الخطة المجانية.
 
 ## 5) القيم التي يحتاجها الموقع (لا تضعها في GitHub)
 
+**معاينة فرع `mvp-live-preview`: متغير واحد فقط** — `DATABASE_URL` (عمود `database_url` من نتيجة ملف الإعداد، سري).
+البقية مضمّنة في الكود لهذه المعاينة وحدها لأنها عامة (`app/lib/previewDefaults.ts`): رابط المشروع، المفتاح العام
+(publishable)، فتح اللوحة، ووضع القاعدة عند وجود الرابط. شهادات Supabase الجذرية العامة مضمّنة أيضًا
+(`app/lib/db/supabase-root-cas.json` من مستودع Supabase الرسمي)، فلا حاجة لتحميل الشهادة.
+
+**الإنتاج (لاحقًا وبموافقة):** لا قيم مضمّنة؛ تُضبط صراحة:
+
 | المتغير | القيمة | سري؟ |
 | --- | --- | --- |
 | `TP_DATA_SOURCE` | `db` | لا |
-| `DATABASE_URL` | عمود `database_url` من نتيجة ملف الإعداد (تأكد أن اسم الخادم بعد `@` يطابق **Connect → Transaction pooler**) | **نعم — مثل service_role** |
-| `DATABASE_CA_CERT` | محتوى الشهادة المحمّلة في الخطوة 4 (يبدأ بـ `-----BEGIN CERTIFICATE-----`) | لا |
+| `DATABASE_URL` | من نتيجة ملف الإعداد | **نعم — مثل service_role** |
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://xlpzfnespldgaxkgskkg.supabase.co` | لا |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | المفتاح العام `sb_publishable_…` من Project Settings → API Keys | لا |
-| `TRUEPRICE_ADMIN_PREVIEW` | `on` (لفتح لوحة الإدارة) | لا |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | المفتاح العام `sb_publishable_…` | لا |
+| `TRUEPRICE_ADMIN_PREVIEW` | `on` لفتح لوحة الإدارة | لا |
+| `DATABASE_CA_CERT` | اختياري: شهادة إضافية إن غيّر Supabase جهة التوقيع | لا |
 
 **لا تنسخ أبدًا** المفتاح السري (`sb_secret_…`) ولا `service_role`: الموقع لا يحتاجهما إطلاقًا، والكود يرفض
 تشغيل الدخول إن وُضع مفتاح سري في متغير عام.
@@ -74,13 +80,12 @@ Vercel متغيرة في الخطة المجانية.
 
 ## 7) ربط المعاينة على Vercel (فرع `mvp-live-preview` فقط)
 
-1. Vercel → المشروع → **Settings → Environment Variables** → لكل متغير من الجدول أعلاه: البيئة **Preview** فقط،
-   ثم في خانة الفرع اختر/اكتب `mvp-live-preview` (حتى لا يصل لأي فرع آخر). **لا تختر Production.**
-2. **Deployments** → آخر نشر للفرع `mvp-live-preview` → **Redeploy** (المتغيرات تُقرأ وقت البناء).
-3. افتح `/api/health` على رابط المعاينة: المتوقع `"dataSource":"db"` و`"db":{"ok":true}` و`"adminLogin":"supabase"`.
-   إن ظهر `reason` فهو رمز يحدد المشكلة دون كشف أي سر (مثل `tls` = الشهادة، `auth_failed` = كلمة المرور،
-   `tenant_not_found` = اسم الخادم في الرابط).
-4. للتراجع الفوري: احذف `TP_DATA_SOURCE` من متغيرات المعاينة وأعد النشر؛ تعود المعاينة لملفات الموقع الحالية.
+1. Vercel → المشروع → **Settings → Environment Variables** → `DATABASE_URL` = عمود `database_url`، البيئة
+   **Preview** فقط، والفرع `mvp-live-preview`، مع Sensitive. **لا تختر Production.**
+2. إعادة النشر (أو دفع أي تعديل للفرع). قبل البناء يتحقق `scripts/vercel/predeploy-check.mjs` من القاعدة بنفس
+   طريقة الموقع؛ أي خلل يُفشل البناء برمز واضح في سجل البناء وتبقى المعاينة السابقة تعمل.
+3. `/api/health` على رابط المعاينة: المتوقع `"dataSource":"db"` و`"db":{"ok":true}` و`"adminLogin":"supabase"`.
+4. للتراجع الفوري: احذف `DATABASE_URL` من متغيرات المعاينة وأعد النشر؛ تعود المعاينة لملفات الموقع الحالية.
 
 الإنتاج (الموقع الرسمي) خارج هذه الخطوات تمامًا ويحتاج موافقتك الصريحة: `docs/rollback-and-launch-ar.md`.
 

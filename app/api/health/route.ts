@@ -7,6 +7,7 @@ import { authMode } from "../../lib/auth/config";
 import { dataSource } from "../../lib/catalog/mode";
 import { classifyDbError, type DbHealthReason } from "../../lib/db/health";
 import { databaseConfigured, withPublic } from "../../lib/db/pool";
+import { withPreviewDefaults } from "../../lib/previewDefaults";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function GET() {
     dataSource: dataSource(),
     db,
     adminLogin: authMode(),
-    adminPanel: process.env.TRUEPRICE_ADMIN_PREVIEW === "on",
+    adminPanel: withPreviewDefaults(process.env).TRUEPRICE_ADMIN_PREVIEW === "on",
     commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7) || null,
   };
   return NextResponse.json(body, {

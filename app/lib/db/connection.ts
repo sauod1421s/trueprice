@@ -3,15 +3,19 @@
  *
  * - DATABASE_URL: سري، على الخادم فقط (لا يبدأ بـ NEXT_PUBLIC_). في Supabase:
  *   postgresql://tp_app.<project-ref>:<password>@<pooler-host>:6543/postgres  (وضع المعاملات)
- * - DATABASE_CA_CERT: شهادة Supabase العامة (PEM) من Database Settings → SSL Configuration.
- *   ليست سرًا، لكنها مطلوبة للتحقق من هوية الخادم (verify-full). بدونها يرفض الاتصال بخادم بعيد،
- *   ولا نعود أبدًا إلى تشفير بلا تحقق (rejectUnauthorized: false).
+ * - التحقق الكامل من هوية الخادم دائمًا للقاعدة البعيدة (سلسلة الشهادات + اسم الخادم)، ولا نعود أبدًا إلى
+ *   تشفير بلا تحقق (rejectUnauthorized: false). خوادم Supabase موقّعة من جهة Supabase الخاصة، فشهاداتها
+ *   الجذرية العامة مضمّنة (supabase-root-cas.json، من مستودع Supabase الرسمي) وتُضاف إلى جذور النظام.
+ * - DATABASE_CA_CERT (اختياري): شهادة PEM إضافية — لو غيّر Supabase جهة التوقيع مستقبلًا.
  * - إعدادات الجلسة (statement_timeout...) تُضبط داخل كل معاملة لا في رسالة البدء، لأن وضع
  *   المعاملات في Supavisor لا يحفظ حالة الجلسة بين الاستعلامات.
  */
+import tls from "node:tls";
 import type { PoolConfig } from "pg";
+import supabaseRoots from "./supabase-root-cas.json";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const SUPABASE_HOST = /(^|\.)supabase\.(co|com)$/i;
 const SSL_URL_PARAMS = ["sslmode", "sslcert", "sslkey", "sslrootcert", "sslpassword", "uselibpqcompat"];
 
 export class DbConfigError extends Error {}
@@ -41,12 +45,15 @@ export function poolConfig(env: Record<string, string | undefined> = process.env
     application_name: "trueprice",
   };
   if (!local) {
-    const ca = (env.DATABASE_CA_CERT ?? "").replace(/\\n/g, "\n").trim();
-    if (!ca.includes("-----BEGIN CERTIFICATE-----")) {
-      throw new DbConfigError(
-        "الاتصال بقاعدة بعيدة يتطلب DATABASE_CA_CERT (شهادة Supabase من Database Settings → SSL Configuration)"
-      );
+    const extra = (env.DATABASE_CA_CERT ?? "").replace(/\\n/g, "\n").trim();
+    if (extra && !extra.includes("-----BEGIN CERTIFICATE-----")) {
+      throw new DbConfigError("DATABASE_CA_CERT ليس شهادة PEM صالحة");
     }
+    const ca = [
+      ...(extra ? [extra] : []),
+      ...(SUPABASE_HOST.test(host) ? supabaseRoots.certs.map((c) => c.pem) : []),
+      ...tls.rootCertificates,
+    ];
     config.ssl = { ca, rejectUnauthorized: true, servername: host };
   }
   return config;

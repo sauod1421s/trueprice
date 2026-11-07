@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authMode, supabasePublicConfig } from "./app/lib/auth/config";
+import { withPreviewDefaults } from "./app/lib/previewDefaults";
 
 /**
  * بوابة /admin على مستوى الطلب.
@@ -15,7 +16,7 @@ import { authMode, supabasePublicConfig } from "./app/lib/auth/config";
  */
 export async function proxy(request: NextRequest) {
   const isProduction = process.env.NODE_ENV === "production";
-  const enabled = process.env.TRUEPRICE_ADMIN_PREVIEW === "on";
+  const enabled = withPreviewDefaults(process.env).TRUEPRICE_ADMIN_PREVIEW === "on";
   if (isProduction && !enabled) {
     return new NextResponse("Not Found", { status: 404, headers: { "X-Robots-Tag": "noindex, nofollow" } });
   }
