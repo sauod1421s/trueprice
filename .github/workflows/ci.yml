@@ -20,6 +20,8 @@ jobs:
       - run: npm run typecheck
       # ملف نقل البيانات db/seed يطابق بيانات الموقع الحالية (أي تغيير بلا إعادة توليد يفشل)
       - run: npm run data:seed:check
+      # ملف الإعداد الموحد db/supabase/setup_all.sql يطابق ملفات المصدر حرفيًا
+      - run: npm run db:setup-all:check
       # الاختبارات مع حد أدنى للتغطية (يفشل تحته)
       - run: npm run coverage
       - run: npm run build
@@ -38,6 +40,8 @@ jobs:
       - run: npm ci
       - run: npm run mvp:setup
       - run: npm run mvp:test-db
+      # ملف الإعداد الموحد كما يُلصق في SQL Editor: بدور غير مدير، بلا/مع مستخدمين، إعادة التشغيل، مطابقة البنية
+      - run: npm run db:setup-all:verify
 
   audit:
     # فحص ثغرات حزم الإنتاج — يفشل عند وجود ثغرة عالية أو حرجة

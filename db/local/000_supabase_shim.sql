@@ -18,7 +18,8 @@ begin
 end $$;
 
 create schema if not exists auth authorization auth_admin;
-create table if not exists auth.users (id uuid primary key, email text);
+create table if not exists auth.users (id uuid primary key, email text, created_at timestamptz not null default now());
+alter table auth.users add column if not exists created_at timestamptz not null default now();
 alter table auth.users owner to auth_admin;
 grant usage on schema auth to anon, authenticated, service_role, supa_postgres;
 grant select, references on auth.users to supa_postgres;

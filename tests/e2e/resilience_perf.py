@@ -156,6 +156,10 @@ st = urllib.request.Request(BASE + "/api/v", data=b'{"p":"/"}', method="POST", h
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"})
 with urllib.request.urlopen(st, timeout=15) as r:
     check("انقطاع القاعدة: الإحصائيات لا تُعطل الصفحة (204)", r.status == 204, f"HTTP {r.status}")
+status, body = get("/api/health")
+hj = json.loads(body) if body.startswith("{") else {}
+check("انقطاع القاعدة: /api/health يعيد 503 برمز تشخيص بلا تفاصيل داخلية",
+      status == 503 and hj.get("db", {}).get("reason") == "network" and not [n for n in LEAKY if n in body], body[:160])
 status, body = get("/cars")
 check("انقطاع القاعدة: صفحة السيارات الثابتة تبقى تعمل", status == 200 and "السيارات" in body, f"HTTP {status}")
 
@@ -172,6 +176,8 @@ for path in ["/product/1", "/", "/contact", "/search?q=ايفون"]:
         time.sleep(1)
     recovered.append(ok)
 check("بعد عودة القاعدة: يتعافى الموقع تلقائيًا دون إعادة تشغيل التطبيق", all(recovered), str(recovered))
+status, body = get("/api/health")
+check("بعد عودة القاعدة: /api/health يعيد 200 والقاعدة متصلة", status == 200 and '"ok":true' in body, body[:160])
 
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} PASS")

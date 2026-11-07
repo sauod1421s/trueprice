@@ -487,6 +487,10 @@ end $$;
 -- ---------------------------------------------------------------------
 revoke all on tp.visitor_salts, tp.rate_limit_hits, tp.page_views, tp.site_settings, tp.contact_requests,
   tp.contact_replies from public, anon, authenticated, service_role, web_reader, ingest_service;
+-- تسلسلات الهوية لا يحتاجها أحد مباشرة (الإدراج عبر دوال المالك فقط). إعادة تشغيل 001 تمنح authenticated
+-- استخدام كل تسلسلات tp، فنعيد سحبه هنا لتبقى النتيجة نفسها بعد أي إعادة تشغيل.
+revoke all on sequence tp.page_views_id_seq, tp.contact_requests_id_seq, tp.contact_replies_id_seq
+  from public, anon, authenticated, service_role, web_reader, ingest_service;
 revoke all on function tp.riyadh_today(), tp.daily_hash(text), tp.rate_limited(text, bytea, int, interval),
   tp.random_code(int), tp.normalize_code(text) from public;
 revoke all on function pub.record_page_view(text, text, text, text, text, text, text, text),

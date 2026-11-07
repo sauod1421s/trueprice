@@ -114,11 +114,14 @@ python tests/e2e/admin_feed_scenario.py http://localhost:3000 mvp-screenshots
 
 - **محليًا:** دخول تجريبي باختيار مستخدم اختبار (يعمل فقط مع قاعدة محلية، ويُعطَّل تلقائيًا على Vercel).
 - **مع Supabase:** بريد + كلمة مرور + تحقق ثنائي TOTP إلزامي (Supabase Auth)، والهوية لا تُقبل على الخادم إلا
-  بعد التحقق من توقيع الرمز (`getClaims`). الإعداد: `docs/supabase-setup-ar.md`، وخطة القاعدة:
-  `docs/supabase-production-plan.md` (بانتظار الموافقة). المتغيرات: `.env.example`.
+  بعد التحقق من توقيع الرمز (`getClaims`). الإعداد: `docs/supabase-setup-ar.md`، والقاعدة:
+  `docs/supabase-production-plan.md`. المتغيرات: `.env.example`.
 
-## ليس في هذه النسخة
+## المعاينة على Vercel وقاعدة Supabase
 
-- لم يُنفَّذ أي SQL على Supabase بعد، ولم يُختبر الدخول عبر مشروع Supabase حقيقي (اختُبر مسار التحقق من التوقيع
-  بمفاتيح اختبار محلية).
-- لا يُنشر شيء على Vercel من هذا الفرع (`vercel.json`).
+- `vercel.json` في هذا الفرع يفعّل معاينة Vercel لفرع `mvp-live-preview` وحده (بقية فروع phase/mvp معطلة،
+  والموقع الرسمي من `main` لا يتأثر).
+- بلا متغيرات بيئة تعمل المعاينة بالوضع العادي (ملفات الموقع). بعد تشغيل `db/supabase/setup_all.sql` في Supabase
+  وإضافة متغيرات Preview للفرع تتحول لوضع القاعدة. فحص الحالة: `/api/health`.
+- التحقق من ملف الإعداد محليًا: `npm run db:setup-all:verify` (في CI أيضًا).
+- التراجع وخطة الإطلاق: `docs/rollback-and-launch-ar.md`.

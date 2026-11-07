@@ -11,6 +11,7 @@ export default defineConfig({
       include: [
         "app/lib/ingest/**/*.ts", "app/lib/auth/**/*.ts", "app/lib/valuation/**/*.ts",
         "app/lib/analytics/**/*.ts", "app/lib/support/validate.ts", "app/lib/admin/feedRows.ts",
+        "app/lib/db/health.ts", "app/lib/db/connection.ts",
       ],
       reporter: ["text-summary", "text"],
       // حد أدنى يفشل CI تحته
