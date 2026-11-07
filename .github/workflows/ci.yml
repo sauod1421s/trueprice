@@ -18,9 +18,26 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # ملف نقل البيانات db/seed يطابق بيانات الموقع الحالية (أي تغيير بلا إعادة توليد يفشل)
+      - run: npm run data:seed:check
       # الاختبارات مع حد أدنى للتغطية (يفشل تحته)
       - run: npm run coverage
       - run: npm run build
+
+  db:
+    # قواعد القاعدة على PostgreSQL حقيقي (محلي داخل CI، بلا Supabase وبلا أسرار):
+    # نفس ملفات الإنتاج بالترتيب، بدور ترحيل غير مدير، ثم اختبارات الصلاحيات والقواعد
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run mvp:setup
+      - run: npm run mvp:test-db
 
   audit:
     # فحص ثغرات حزم الإنتاج — يفشل عند وجود ثغرة عالية أو حرجة
