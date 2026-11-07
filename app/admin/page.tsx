@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { dashboardCounts } from "../lib/admin/db";
+import { dashboardCounts, legacyPendingCount } from "../lib/admin/db";
 import { currentClaims, PREVIEW_USERS, previewAuthEnabled } from "../lib/admin/session";
 import { loginAs } from "./actions";
 import AdminShell, { Flash, requireAdmin } from "./_components/AdminShell";
@@ -56,7 +56,7 @@ export default async function AdminHome({ searchParams }: Props) {
   }
 
   const ctx = await requireAdmin();
-  const counts = await dashboardCounts(ctx.claims);
+  const [counts, legacy] = await Promise.all([dashboardCounts(ctx.claims), legacyPendingCount(ctx.claims)]);
   const tiles = [
     { label: "أسعار بانتظار المراجعة", value: counts.pending, href: "/admin/review", tone: "border-yellow/60 bg-yellow-50" },
     { label: "أسعار معتمدة ظاهرة", value: counts.verified, href: "/admin/review?status=verified", tone: "border-mint/50 bg-mint-50" },
@@ -65,6 +65,7 @@ export default async function AdminHome({ searchParams }: Props) {
     { label: "منتجات", value: counts.products, href: "/admin/catalog", tone: "border-line bg-surface" },
     { label: "متاجر نشطة", value: counts.stores, href: "/admin/stores", tone: "border-line bg-surface" },
     { label: "مصادر معتمدة", value: counts.sources, href: "/admin/stores", tone: "border-line bg-surface" },
+    { label: "أسعار مرجعية قديمة (غير معتمدة)", value: legacy, href: "/admin/review?legacy=1", tone: "border-line bg-surface" },
   ];
 
   return (

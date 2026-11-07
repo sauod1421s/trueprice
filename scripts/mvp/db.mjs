@@ -160,7 +160,7 @@ const cmd = process.argv[2];
 if (cmd === "setup") await setup();
 else if (cmd === "dev") await runWithDb(["dev", ...process.argv.slice(3)]);
 else if (cmd === "start") await runWithDb(["start", ...process.argv.slice(3)]);
-else if (cmd === "build") await runWithDb(["build"]);
+else if (cmd === "build") await runWithDb(["build", ...process.argv.slice(3)]);
 else if (cmd === "reset") {
   rmSync(DATA_DIR, { recursive: true, force: true });
   await setup();

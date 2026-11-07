@@ -20,7 +20,7 @@ import { Badge, Price, SectionHeading, formatNumber } from "./components/ui";
 import products from "./data/products";
 import { brandSummaries, featuredBrandIds } from "./lib/carBrands";
 import { popularProducts } from "./lib/examples";
-import { getSiteStats, type SiteStats } from "./lib/catalog";
+import { dataSource, getSiteStats, showLegacyReference, type SiteStats } from "./lib/catalog";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -72,6 +72,10 @@ const STEPS: { art: ReactNode; title: string; text: string }[] = [
 export default async function Home() {
   // في وضع MVP (قاعدة البيانات) تُحسب الأرقام من القاعدة؛ وإلا من البيانات الحالية
   const STATS = statsOf(await getSiteStats());
+  // بطاقة المثال تعرض أسعارًا مرجعية قديمة غير موثقة من البيانات الحالية.
+  // في وضع MVP تتبع نفس قاعدة صفحة المنتج: تُعرض موسومة "غير معتمد"، وتختفي إن عُطّل عرض المرجعي القديم.
+  const isDb = dataSource() === "db";
+  const showShowcase = !isDb || showLegacyReference();
   const maxOffer = Math.max(...showcaseOffers.map((o) => o.price));
   const minOffer = Math.min(...showcaseOffers.map((o) => o.price));
 
@@ -120,13 +124,14 @@ export default async function Home() {
           <div className="relative hidden h-[27rem] lg:block">
             <div aria-hidden className="absolute inset-10 rounded-full bg-mint/10 blur-3xl" />
 
+            {showShowcase && (
             <Link
               href={`/product/${showcase.id}`}
               className="theme-light absolute left-1/2 top-1/2 z-10 w-72 -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/60 bg-white/95 p-5 shadow-[0_30px_60px_-20px_rgb(0_0_0/0.55)] backdrop-blur transition-transform hover:-translate-y-[52%]"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs text-ink-3">مثال من المنصة</span>
-                <Badge tone="warn">غير موثق</Badge>
+                <Badge tone="warn">{isDb ? "مرجعي قديم · غير معتمد" : "غير موثق"}</Badge>
               </div>
               <div className="mt-2 font-bold leading-snug">{showcase.nameAr}</div>
               <div className="mt-3 text-xs text-ink-3">أقل سعر مرجعي</div>
@@ -154,6 +159,7 @@ export default async function Home() {
                 })}
               </ul>
             </Link>
+            )}
 
             <Magnifier3D className="float absolute right-2 top-0 w-32" />
             <Coins3D className="float-slow absolute left-0 top-6 w-28" />
