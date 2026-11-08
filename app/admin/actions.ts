@@ -184,28 +184,37 @@ export async function changeSourceStatus(fd: FormData) {
   back("/admin/stores", "ok", status === "approved" ? `أُعيد اعتماد المصدر ${sourceId}` : `أُوقف المصدر ${sourceId}: لن يقبل أي استيراد جديد`);
 }
 
-/** اعتماد مصدر «مساعد الرصد» بعد مراجعة شروط استخدام موقع المتجر: رابط الشروط + إقرار صريح. */
+/** اعتماد مصادر «مساعد الرصد» بعد مراجعة شروط استخدام مواقعها: رابط الشروط لكل مصدر + إقرار صريح واحد. */
 export async function approveResearch(fd: FormData) {
   const claims = await claimsOrLogin();
-  const sourceId = text(fd, "sourceId", 60);
-  const termsUrl = text(fd, "termsUrl", 500);
-  if (fd.get("attest") !== "yes") {
-    back("/admin/stores", "err", "يجب الإقرار بمراجعة شروط الموقع قبل اعتماد المصدر.");
+  if (fd.get("attest") !== "yes") back("/admin/stores", "err", "يجب الإقرار بمراجعة شروط المواقع قبل اعتماد المصادر.");
+  const picks = fd.getAll("pick").filter((v): v is string => typeof v === "string").slice(0, 30);
+  if (!picks.length) back("/admin/stores", "err", "اختر مصدرًا واحدًا على الأقل.");
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const sourceId of picks) {
+    const termsUrl = text(fd, `terms-${sourceId}`, 500);
+    let valid = false;
+    try {
+      const u = new URL(termsUrl);
+      valid = u.protocol === "https:" && !u.username && !u.password;
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
+      failed.push(`${sourceId} (رابط الشروط غير صالح)`);
+      continue;
+    }
+    try {
+      await approveResearchSource(claims, sourceId, termsUrl);
+      done.push(sourceId);
+    } catch (e) {
+      failed.push(`${sourceId} (${friendlyDbError(e)})`);
+    }
   }
-  let ok = false;
-  try {
-    const u = new URL(termsUrl);
-    ok = u.protocol === "https:" && !u.username && !u.password;
-  } catch {
-    ok = false;
-  }
-  if (!ok) back("/admin/stores", "err", "رابط الشروط يجب أن يكون رابط https صالحًا لصفحة شروط الاستخدام في موقع المتجر.");
-  try {
-    await approveResearchSource(claims, sourceId, termsUrl);
-  } catch (e) {
-    back("/admin/stores", "err", friendlyDbError(e));
-  }
-  back("/admin/stores", "ok", `اعتُمد المصدر ${sourceId} بعد مراجعة الشروط. أسعاره تبقى غير منشورة حتى توثَّق كل واحدة منها.`);
+  const msg = `اعتُمد ${done.length} مصدر بعد مراجعة الشروط${done.length ? `: ${done.join("، ")}` : ""}. الأسعار تبقى غير منشورة حتى توثَّق كل واحدة منها.`;
+  if (failed.length) back("/admin/stores", "err", `${msg} لم يُعتمد: ${failed.join("، ")}`);
+  back("/admin/stores", "ok", msg);
 }
 
 export async function addStore(fd: FormData) {

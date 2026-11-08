@@ -49,7 +49,9 @@ function parseCsv(text) {
   return rows;
 }
 
-const HEAD = ["product_id", "product_name", "store_id", "price_sar", "list_price_sar", "url", "observed_at", "availability", "vat_included", "match", "notes"];
+const BASE_HEAD = ["product_id", "product_name", "store_id", "price_sar", "list_price_sar", "url", "observed_at", "availability", "vat_included", "match", "notes"];
+// السيارات: عمودان إضافيان يطابقان سنة الموديل والفئة المسجلة للمنتج في القاعدة حرفيًا (القاعدة ترفض أي اختلاف)
+const HEAD = vertical === "cars" ? [...BASE_HEAD, "model_year", "trim"] : BASE_HEAD;
 const [head, ...body] = parseCsv(raw);
 if (head.join(",") !== HEAD.join(",")) { console.error("bad header; expected:\n" + HEAD.join(",")); process.exit(1); }
 
@@ -74,6 +76,7 @@ const rows = body.map((cells, idx) => {
   if (!["in_stock", "out_of_stock", "unknown"].includes(r.availability)) err("availability invalid");
   if (r.vat_included !== "yes") err("vat_included must be yes (Saudi retail prices include VAT)");
   if (r.match.length < 3) err("match note required");
+  if (vertical === "cars" && (!/^(19|20)\d\d$/.test(r.model_year) || !r.trim)) err("cars need model_year and trim matching the product");
   const key = `${r.product_id}|${r.store_id}`;
   if (seen.has(key)) err(`duplicate product/store ${key}`);
   seen.add(key);
@@ -93,6 +96,7 @@ const rows = body.map((cells, idx) => {
     product_id: r.product_id,
     date_confirmed: true,
     evidence: { vat_included: true, match: r.match, notes: r.notes || null, researcher: "assisted-research" },
+    ...(vertical === "cars" ? { car: { model_year: r.model_year, trim: r.trim, seller_type: "dealer" } } : {}),
   };
 });
 if (errors.length) { console.error(errors.join("\n")); process.exit(1); }

@@ -7,7 +7,7 @@
 --
 -- ما يفعله:
 --   • يوقف (suspended) أي مصدر مساعد رصد معتمد ⇒ تختفي أسعاره من الموقع فورًا، ويبقى سجلها كما هو (لا حذف لأسعار).
---   • يحذف مصادر مساعد الرصد التي لم يُستورد منها أي ملف قط (مسودات بلا تاريخ).
+--   • يحذف مصادر مساعد الرصد التي لم يُستورد منها أي ملف قط (مسودات بلا تاريخ)، ومتاجر الموزعين الأربعة إن لم يُشر إليها شيء.
 --   • يعيد الدوال الاثنتي عشرة إلى نص 001 الحرفي، ويحذف دوال الحماية ومخطط research_api ودور tp_research.
 --   • يحذف القيود الثلاثة وعمود service_submission (بعد إيقاف المصادر لا يُستخدم).
 --   • يعيد price:verify و price:reject إلى قيمة 001 (بلا اشتراط تحقق ثنائي على مستوى القاعدة؛ اللوحة تبقى تشترطه).
@@ -28,6 +28,11 @@ end $tp004rb$;
 update tp.sources set status = 'suspended' where kind = 'assisted_research' and status = 'approved';
 delete from tp.sources s
 where s.kind = 'assisted_research' and not exists (select 1 from tp.import_files f where f.source_id = s.id);
+-- متاجر الموزعين التي أضافها 004 تُحذف فقط إن لم يبق ما يشير إليها (مصدر أو عرض سعر)
+delete from tp.stores st
+where st.id in ('hyundai-naghi', 'hyundai-wallan', 'hyundai-almajdouie', 'kia-nmc')
+  and not exists (select 1 from tp.sources s where s.store_id = st.id)
+  and not exists (select 1 from tp.offer_streams os where os.store_id = st.id);
 
 create or replace function ingest_api.register_import(
   p_source_id text, p_storage_path text, p_file_name text, p_byte_size bigint, p_sha256 text,

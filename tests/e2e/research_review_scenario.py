@@ -95,22 +95,25 @@ with sync_playwright() as p:
     step("2. المصادر مسودة: القاعدة ترفض الإدخال، واللوحة تعرض نموذج الاعتماد", drafts_reject)
 
     def approve_requires_terms():
-        form = page.locator("[data-research-approve=research-apple]")
-        form.locator("input[name=termsUrl]").fill("https://www.apple.com/sa/legal/")
+        form = page.locator("[data-research-batch]")
+        form.locator("[data-research-pick=research-apple]").check()
+        form.locator("input[name='terms-research-apple']").fill("https://www.apple.com/sa/legal/")
         form.locator("button[type=submit]").click()  # بلا إقرار: النموذج لا يُرسل (required)
         expect(page.locator("[data-flash=ok]")).to_have_count(0)
         expect(form).to_be_visible()
 
-    step("3. اعتماد المصدر يتطلب رابط الشروط وإقرارًا صريحًا", approve_requires_terms)
+    step("3. اعتماد المصادر يتطلب رابط الشروط وإقرارًا صريحًا", approve_requires_terms)
 
     def approve_sources():
+        form = page.locator("[data-research-batch]")
         for s in STORES:
-            form = page.locator(f"[data-research-approve=research-{s}]")
-            form.locator("input[name=termsUrl]").fill(f"https://example.com/{s}/terms")
-            form.locator("input[name=attest]").check()
-            form.locator("button[type=submit]").click()
-            expect(page.locator("[data-flash=ok]").first).to_contain_text(f"research-{s}")
-        expect(page.locator("[data-research-approve]")).to_have_count(0)
+            form.locator(f"[data-research-pick=research-{s}]").check()
+            form.locator(f"input[name='terms-research-{s}']").fill(f"https://example.com/{s}/terms")
+        form.locator("input[name=attest]").check()
+        form.locator("button[type=submit]").click()
+        expect(page.locator("[data-flash=ok]").first).to_contain_text("اعتُمد 3")
+        for s in STORES:
+            expect(page.locator(f"[data-research-approve=research-{s}]")).to_have_count(0)
         expect(page.get_by_text("https://example.com/apple/terms")).to_be_visible()
         ok, out = db("-c", """select count(*)::int as n from tp.sources s join tp.audit_log a
             on a.entity_type = 'sources' and a.entity_id = s.id and a.actor_id = s.approved_by and a.after ->> 'status' = 'approved'
@@ -118,7 +121,7 @@ with sync_playwright() as p:
         assert ok and json.loads(out)[0]["n"] == 3, out
         page.screenshot(path=os.path.join(OUT, "r0b-sources-approved.png"), full_page=True)
 
-    step("4. المشرف يعتمد 3 مصادر بعد مراجعة الشروط (مسجل باسمه في سجل التدقيق)", approve_sources)
+    step("4. المشرف يعتمد 3 مصادر دفعة واحدة بعد مراجعة الشروط (مسجل باسمه)", approve_sources)
 
     def import_as_research():
         ok, out = db(IMPORT_SQL)
@@ -128,6 +131,9 @@ with sync_playwright() as p:
         ok, out = db("-c", """select count(*)::int as n from tp.audit_log a join tp.import_runs r on a.entity_id = r.id::text
             where r.source_id like 'research-%' and a.action = 'import.commit' and a.actor_id is null
               and a.actor_label = 'service:' || r.source_id""")
+        assert ok and json.loads(out)[0]["n"] == 3, out
+        ok, out = db("-c", """select count(*)::int as n from tp.audit_log a join tp.import_runs r on a.entity_id = r.id::text
+            where r.source_id like 'research-%' and a.action = 'research.submit' and a.after ->> 'db_role' = 'tp_research'""")
         assert ok and json.loads(out)[0]["n"] == 3, out
 
     step("5. الإدخال بدور tp_research (سجل التدقيق: service:research-<متجر>)", import_as_research)

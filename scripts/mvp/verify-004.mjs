@@ -132,12 +132,12 @@ async function main() {
 
     console.log("— تطبيق 004 (كما في SQL Editor) وإعادة تشغيله");
     let r = await mig(migration);
-    ok(r.ok && Number(r.row.research_sources_expect_2) === 2 && Number(r.row.approved_research_sources_expect_0) === 0
+    ok(r.ok && Number(r.row.research_sources_expect_9) === 9 && Number(r.row.approved_research_sources_expect_0) === 0
        && Number(r.row.privilege_violations_expect_0) === 0 && /004-assisted-research/.test(r.row.migrations),
-       "004 نجح: مصدران بحالة مسودة، 0 معتمد، 0 مخالفات", r.ok ? "" : r.error);
+       "004 نجح: 9 مصادر بحالة مسودة، 0 معتمد، 0 مخالفات", r.ok ? "" : r.error);
     const fp1 = await fingerprint();
     r = await mig(migration);
-    ok(r.ok && Number(r.row.research_sources_expect_2) === 2 && Number(r.row.privilege_violations_expect_0) === 0, "إعادة تشغيل 004 نجحت",
+    ok(r.ok && Number(r.row.research_sources_expect_9) === 9 && Number(r.row.privilege_violations_expect_0) === 0, "إعادة تشغيل 004 نجحت",
        r.ok ? "" : r.error);
     const fp2 = await fingerprint();
     ok(fp1.fingerprint === fp2.fingerprint, "إعادة التشغيل لا تغيّر شيئًا (البصمة نفسها)");
@@ -250,6 +250,11 @@ async function main() {
     ok(["import.register", "import.seal", "import.commit"].every((a) => acts.includes(a)) &&
        audit.rows.every((x) => x.actor_id === null && /^service:research-(apple|jarir)$/.test(x.actor_label ?? "")),
        "سجل التدقيق: تسجيل/ختم/اعتماد الاستيراد باسم service:research-<متجر>", [...new Set(audit.rows.map((x) => x.actor_label))].join(", "));
+    const ident = await su(`select after from tp.audit_log where action = 'research.submit' and entity_id = any($1::text[])`, [runs.map((x) => x.id)]);
+    ok(ident.rows.length === 2 && ident.rows.every((x) => x.after.db_login === "supa_postgres" && x.after.db_role === "tp_research"
+       && /^[0-9a-f]{64}$/.test(x.after.sha256) && /#(apple|jarir)$/.test(x.after.file_name)),
+       "سجل التدقيق يحفظ هوية الاتصال لكل دفعة (دور الدخول + الدور المفعّل + الملف)",
+       ident.rows.map((x) => `${x.after.db_login}/${x.after.db_role}`).join(", "));
     const mism = await mig(`begin; set local role tp_research;
       select research_api.stage_rows(research_api.register_import('research-apple', 'mm.csv', 10, repeat('d',64), 1), 1,
         '[{"store_id":"jarir","offer_key":"x","condition":"new","amount":"1","currency":"SAR","as_of":"2026-11-08T10:00:00+03:00","availability":"unknown","name":"x","url":"https://example.com/x","canonical_url":"https://example.com/x","product_id":"1","date_confirmed":true}]'::jsonb);

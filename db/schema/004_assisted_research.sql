@@ -13,14 +13,17 @@
 --   3) دور tp_research (NOLOGIN): لا يدخل القاعدة بنفسه، لا صلاحية له على أي جدول، وينفّذ دوال research_api الأربع فقط.
 --      دور الترحيل (postgres) يستطيع التحول إليه (SET ROLE) لتقليص صلاحياته أثناء الإدخال، دون أن يرث منه شيئًا.
 --   4) مخطط research_api: register/stage/seal/commit — تقبل مصادر assisted_research فقط، وتمر بدوال الاستيراد الرسمية.
+--      كل دفعة تسجّل في سجل التدقيق هوية الاتصال الفعلية (research.submit: دور الدخول، الدور المفعّل، اسم التطبيق، الملف).
 --   5) مسار الشركاء ingest_api ومسار رفع اللوحة admin_api يرفضان مصادر وعمليات مساعد الرصد (سطر حماية واحد في كل
 --      دالة؛ admin_api.discard_import لا يتغير ليبقى للمشرف إلغاء عملية رصد عالقة).
 --   6) الدالتان tp.register_import_core و tp.commit_import_core: سطر واحد في كل منهما — مسار الخدمة يُقبل إذا
 --      allow_automated أو service_submission (بدل allow_automated فقط).
 --   7) admin_api.verify_observation: سطر واحد — اعتماد سعر مساعد الرصد يشترط رابط دليل (مثل الإدخال اليدوي).
 --   8) tp.privilege_violations: يشمل research_api، ويعدّ أي صلاحية زائدة لـ tp_research مخالفة.
---   9) مصدران بحالة «مسودة» (غير معتمدين): research-apple و research-jarir. لا يقبلان أي إدخال حتى يعتمد المشرف كل
---      مصدر من اللوحة بعد مراجعة شروط الموقع (يُسجَّل المعتمِد ووقت المراجعة ورابط الشروط في سجل التدقيق).
+--   9) 9 مصادر بحالة «مسودة» (غير معتمدة): research-apple و research-jarir للإلكترونيات، و7 لمواقع موزعي السيارات
+--      الرسميين (تويوتا، نيسان، كيا الجبر، كيا NMC، وموزعو هيونداي الثلاثة ناغي والوعلان والمجدوعي — 4 منهم متاجر جديدة).
+--      لا تقبل أي إدخال حتى يعتمد المشرف كل مصدر من اللوحة بعد مراجعة شروط الموقع (يُسجَّل المعتمِد ووقت المراجعة
+--      ورابط الشروط في سجل التدقيق).
 --  10) تشديد: صلاحيتا price:verify و price:reject تتطلبان تحققًا ثنائيًا (aal2) داخل القاعدة نفسها.
 --
 -- إعادة التشغيل آمنة (لا يتكرر شيء). التراجع: 004_assisted_research_rollback.sql.
@@ -100,15 +103,22 @@ create or replace function research_api.register_import(
   p_source_id text, p_file_name text, p_byte_size bigint, p_sha256 text, p_rows int
 ) returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare s tp.sources;
+declare s tp.sources; v_run uuid;
 begin
   select * into s from tp.sources where id = p_source_id;
   if not found or s.kind <> 'assisted_research' or not s.service_submission then
     raise exception 'research_api accepts assisted-research sources only' using errcode = '42501';
   end if;
-  return tp.register_import_core(null, 'service', p_source_id, 'imports/research/' || p_sha256, p_file_name, p_byte_size,
+  v_run := tp.register_import_core(null, 'service', p_source_id, 'imports/research/' || p_sha256, p_file_name, p_byte_size,
     p_sha256, 'research-ledger-1', 'csv', '{"max_rows":1000}'::jsonb,
     pg_catalog.jsonb_build_object('accepted', p_rows, 'rejected', 0), '[]'::jsonb, '[]'::jsonb);
+  -- هوية الاتصال الفعلية في سجل التدقيق: دور الدخول، والدور المفعّل (SET ROLE)، واسم التطبيق، والملف
+  perform tp.write_audit('research.submit', 'import_run', v_run::text, null,
+    pg_catalog.jsonb_build_object('db_login', session_user::text, 'db_role', pg_catalog.current_setting('role', true),
+      'application_name', pg_catalog.current_setting('application_name', true),
+      'file_name', p_file_name, 'sha256', p_sha256, 'rows', p_rows),
+    null, 'service:' || p_source_id);
+  return v_run;
 end $$;
 
 create or replace function research_api.stage_rows(p_run_id uuid, p_first_row_no int, p_rows jsonb) returns int
@@ -677,11 +687,29 @@ values
    'Asia/Riyadh', false, true, 'draft', 'رصد يدوي بحجم بشري من صفحات المنتج العامة على هذا الموقع، مع رابط الصفحة ووقت الرصد لكل سعر؛ لا جمع آلي ولا نسخ من مواقع المقارنة. الإدخال عبر دور الخدمة tp_research، وكل سعر غير موثق حتى يعتمده مشرف بعد فتح الرابط. يُعتمد المصدر فقط بعد مراجعة شروط استخدام الموقع.')
 on conflict (id) do nothing;
 
+-- موزعون رسميون مستقلون لهيونداي وكيا (لكل موزع أسعاره المعلنة في موقعه): متاجر جديدة (إضافة فقط)
+insert into tp.stores (id, name, name_ar) values
+  ('hyundai-naghi', 'Hyundai — Mohamed Yousuf Naghi Motors (hyundaiksa.com/mynaghi)', 'هيونداي — محمد يوسف ناغي للسيارات'),
+  ('hyundai-wallan', 'Hyundai — Wallan Trading (hyundaiksa.com/wallan)', 'هيونداي — الوعلان للتجارة'),
+  ('hyundai-almajdouie', 'Hyundai — Almajdouie Motors (hyundaiksa.com/almajdouie)', 'هيونداي — المجدوعي للسيارات'),
+  ('kia-nmc', 'Kia — National Marketing Company (kia.com/nmc)', 'كيا — الشركة الوطنية للتسويق')
+on conflict (id) do nothing;
+
+-- مصادر السيارات (مسودة): موقع الوكيل/الموزع الرسمي، مصدر لكل متجر
+insert into tp.sources (id, name, kind, vertical, store_id, default_currency, time_zone, allow_automated, service_submission,
+                        status, permission_basis)
+select 'research-' || st.id, 'مساعد الرصد — ' || st.name_ar, 'assisted_research', 'cars', st.id, 'SAR', 'Asia/Riyadh',
+       false, true, 'draft', 'رصد يدوي بحجم بشري من صفحات المنتج العامة على هذا الموقع، مع رابط الصفحة ووقت الرصد لكل سعر؛ لا جمع آلي ولا نسخ من مواقع المقارنة. الإدخال عبر دور الخدمة tp_research، وكل سعر غير موثق حتى يعتمده مشرف بعد فتح الرابط. يُعتمد المصدر فقط بعد مراجعة شروط استخدام الموقع.'
+from tp.stores st
+where st.id in ('toyota-brand-site', 'nissan-brand-site', 'kia-brand-site', 'kia-nmc',
+                'hyundai-naghi', 'hyundai-wallan', 'hyundai-almajdouie')
+on conflict (id) do nothing;
+
 insert into tp.schema_migrations (version) values ('004-assisted-research') on conflict (version) do nothing;
 
 commit;
 
-select (select count(*) from tp.sources where kind = 'assisted_research') as research_sources_expect_2,
+select (select count(*) from tp.sources where kind = 'assisted_research') as research_sources_expect_9,
        (select count(*) from tp.sources where kind = 'assisted_research' and status = 'approved') as approved_research_sources_expect_0,
        (select count(*) from tp.privilege_violations()) as privilege_violations_expect_0,
        (select string_agg(version, ', ' order by applied_at) from tp.schema_migrations) as migrations;

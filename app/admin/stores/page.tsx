@@ -1,5 +1,6 @@
 import { Badge } from "../../components/ui";
 import { listStoresAndSources } from "../../lib/admin/db";
+import { SUGGESTED_TERMS } from "../../lib/admin/researchTerms";
 import { addSource, addStore, approveResearch, changeSourceStatus } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
 
@@ -20,10 +21,52 @@ export default async function StoresPage({ searchParams }: Props) {
   const { ok, err } = await searchParams;
   const ctx = await requireAdmin();
   const { stores, sources } = await listStoresAndSources(ctx.claims);
+  const pendingResearch = sources.filter((s) => s.kind === "assisted_research" && (s.status === "draft" || s.status === "suspended"));
 
   return (
     <AdminShell ctx={ctx} active="/admin/stores" title="المتاجر ومصادر الأسعار" subtitle="لا يُستورد أي سعر إلا من مصدر معتمد بأساس إذن مكتوب">
       <Flash ok={ok} err={err} />
+      {can(ctx, "source:manage") && pendingResearch.length > 0 && (
+        <section className="card mb-5 p-5">
+          <h2 className="font-bold">مصادر مساعد الرصد بانتظار مراجعة الشروط ({pendingResearch.length})</h2>
+          <p className="mt-1 text-sm text-ink-3">
+            افتح صفحة شروط كل موقع وتأكد أنها لا تمنع نقل السعر المعروض علنًا مع رابطه، ثم حدّد المصادر واعتمدها. اعتماد المصدر لا
+            ينشر أي سعر؛ كل سعر يحتاج توثيقًا منفصلًا من «مراجعة الأسعار».
+          </p>
+          <form action={approveResearch} className="mt-3 space-y-2" data-research-batch>
+            {pendingResearch.map((s) => {
+              const hint = SUGGESTED_TERMS[s.id];
+              const suggested = s.termsUrl ?? hint?.url ?? "";
+              return (
+                <div key={s.id} className="rounded-xl border border-line p-3" data-research-approve={s.id}>
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" name="pick" value={s.id} data-research-pick={s.id} />
+                    <span>{s.name}</span>
+                    <span className="text-xs text-ink-3" dir="ltr">({s.id})</span>
+                  </label>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input name={`terms-${s.id}`} type="url" defaultValue={suggested} className={inputCls + " min-w-0 flex-1"} dir="ltr"
+                      placeholder="https:// رابط صفحة شروط الاستخدام" />
+                    {suggested && (
+                      <a href={suggested} target="_blank" rel="noopener noreferrer" className="text-xs underline">افتح الشروط</a>
+                    )}
+                  </div>
+                  {hint?.note && (
+                    <p className="mt-2 rounded-lg bg-coral-50 p-2 text-xs text-coral-ink" data-terms-note>
+                      ما وجدناه في الشروط: {hint.note} يُنصح بالحصول على إذن كتابي قبل الاعتماد.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="attest" value="yes" required className="mt-1" />
+              <span>راجعت شروط مواقع المصادر المحددة وأقر بأنها لا تمنع نقل السعر المعروض علنًا مع رابطه.</span>
+            </label>
+            <SubmitButton>اعتماد المصادر المحددة</SubmitButton>
+          </form>
+        </section>
+      )}
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="card p-5">
           <h2 className="font-bold">إضافة متجر</h2>
@@ -117,19 +160,6 @@ export default async function StoresPage({ searchParams }: Props) {
                     <a href={s.termsUrl} target="_blank" rel="noopener noreferrer" className="underline" dir="ltr">{s.termsUrl}</a>
                     {s.termsReviewedAt ? ` · ${new Date(s.termsReviewedAt).toLocaleDateString("ar-SA-u-nu-latn")}` : ""}
                   </div>
-                )}
-                {can(ctx, "source:manage") && s.kind === "assisted_research" && (s.status === "draft" || s.status === "suspended") && (
-                  <form action={approveResearch} className="mt-2 space-y-2 rounded-xl border border-line p-3" data-research-approve={s.id}>
-                    <input type="hidden" name="sourceId" value={s.id} />
-                    <Field label="رابط صفحة شروط الاستخدام في موقع المتجر" hint="راجع الشروط بنفسك أولًا: هل تسمح بنقل الأسعار المعروضة علنًا مع رابط المصدر؟">
-                      <input name="termsUrl" type="url" required pattern="https://.+" className={inputCls} dir="ltr" placeholder="https://" />
-                    </Field>
-                    <label className="flex items-start gap-2 text-xs">
-                      <input type="checkbox" name="attest" value="yes" required className="mt-0.5" />
-                      <span>راجعت شروط الموقع وأقر بأنها لا تمنع نقل السعر المعروض علنًا مع رابطه. اعتماد المصدر لا ينشر أي سعر؛ كل سعر يحتاج توثيقًا منفصلًا.</span>
-                    </label>
-                    <SubmitButton>اعتماد المصدر بعد مراجعة الشروط</SubmitButton>
-                  </form>
                 )}
                 {can(ctx, "source:manage") && s.kind !== "legacy_manual" && (s.status === "approved" || (s.status === "suspended" && s.kind !== "assisted_research")) && (
                   <form action={changeSourceStatus} className="mt-1">

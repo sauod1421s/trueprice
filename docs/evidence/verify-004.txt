@@ -1,13 +1,13 @@
-# نتيجة scripts/mvp/verify-004.mjs — 2026-11-08 13:22 بتوقيت الرياض
-# 004 sha256=8817a8105bc310c03be089f5cf2df05d0d3a3c3e647e0ab91e48e6aede5864e2
-# rollback sha256=284c5f2ccd78d963340469d67c6fb2e5cc40a67bc1014db02f1c143ba9850c33
+# نتيجة scripts/mvp/verify-004.mjs — 2026-11-08 15:19 بتوقيت الرياض
+# 004 sha256=66f1ec8c82cac1e219d051cbb16f73d07fcc5ce7759a5aecd2f7766d9250295b
+# rollback sha256=f024e5b2f4bd58209d7063c4fe96cce41bba4ea1cd4d1c1c17edc9cd2c7248c7
 # بصمة الإنتاج قبل 004 (TP_PROD_FINGERPRINT) = 2c02b9e2b87b940e5a6ab5f12365a42d
 
 — النسخة المطابقة
   ✓ ملف الإعداد نفسه الذي نُفّذ في الإنتاج: نجح بدور غير مدير
   ✓ بصمة البنية مطابقة لقاعدة Supabase قبل 004 — 2c02b9e2b87b940e5a6ab5f12365a42d (1711 عنصرًا)
 — تطبيق 004 (كما في SQL Editor) وإعادة تشغيله
-  ✓ 004 نجح: مصدران بحالة مسودة، 0 معتمد، 0 مخالفات
+  ✓ 004 نجح: 9 مصادر بحالة مسودة، 0 معتمد، 0 مخالفات
   ✓ إعادة تشغيل 004 نجحت
   ✓ إعادة التشغيل لا تغيّر شيئًا (البصمة نفسها)
 — التغييرات المقصودة فقط
@@ -52,6 +52,7 @@
   ✓ الإدخال بدور tp_research عبر research_api نجح (عمليتان، متجر لكل مصدر)
   ✓ هوية المُدخل: actor_kind=service بلا مستخدم (المساعد ليس مشرفًا ولا يملك حساب مستخدم)
   ✓ سجل التدقيق: تسجيل/ختم/اعتماد الاستيراد باسم service:research-<متجر> — service:research-apple, service:research-jarir
+  ✓ سجل التدقيق يحفظ هوية الاتصال لكل دفعة (دور الدخول + الدور المفعّل + الملف) — supa_postgres/tp_research, supa_postgres/tp_research
   ✓ لا يُدخل سعر متجر في مصدر متجر آخر — row 1: row store does not belong to single-store source rese
   ✓ قبل الاعتماد: لا يظهر أي سعر في الموقع
   ✓ مستخدم بلا صلاحية الاعتماد (viewer) لا يعتمد — permission denied: price:verify
