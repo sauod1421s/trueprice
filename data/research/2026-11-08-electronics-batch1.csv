@@ -1,0 +1,7 @@
+product_id,product_name,store_id,price_sar,list_price_sar,url,observed_at,availability,vat_included,match,notes
+1,iPhone 17 256GB,apple,4299,,https://www.apple.com/sa-en/shop/buy-iphone/iphone-17,2026-11-08T12:31:00+03:00,unknown,yes,iPhone 17 / 256GB (كل الألوان 4299),صفحة الشراء الرسمية؛ 256GB بسعر 4299 لكل الألوان
+1,iPhone 17 256GB,jarir,4299,,https://www.jarir.com/sa-en/apple-iphone-17-smartphones-666784.html,2026-11-08T12:36:00+03:00,unknown,yes,iPhone 17 / 256GB / Black / MG674AHA,Inclusive of VAT؛ لا حالة مخزون معلنة
+2,iPhone 17 512GB,apple,5299,,https://www.apple.com/sa-en/shop/buy-iphone/iphone-17,2026-11-08T12:31:00+03:00,unknown,yes,iPhone 17 / 512GB (كل الألوان 5299),صفحة الشراء الرسمية
+2,iPhone 17 512GB,jarir,5299,,https://www.jarir.com/sa-en/apple-iphone-17-smartphones-666791.html,2026-11-08T12:44:00+03:00,unknown,yes,iPhone 17 / 512GB / Black / MG6D4AHA,Inclusive of VAT
+5,iPhone 16 128GB,apple,3799,,https://www.apple.com/sa-en/shop/buy-iphone/iphone-16,2026-11-08T12:39:00+03:00,unknown,yes,iPhone 16 / 128GB (السعة الوحيدة المعروضة),صفحة الشراء الرسمية؛ 5 ألوان بنفس السعر
+5,iPhone 16 128GB,jarir,3799,,https://www.jarir.com/sa-en/apple-iphone-16-smartphones-642516.html,2026-11-08T12:44:00+03:00,unknown,yes,iPhone 16 / 128GB / Pink / MYDT3AHA,Inclusive of VAT
