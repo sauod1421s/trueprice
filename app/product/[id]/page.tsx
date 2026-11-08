@@ -16,6 +16,8 @@ import {
 } from "../../lib/catalog";
 import PriceHistory from "../../components/PriceHistory";
 import LegacyReferencePrices from "../../components/LegacyReferencePrices";
+import { PriceComparison } from "../../components/PriceComparison";
+import { summarizeMarket } from "../../lib/valuation/market";
 import {
   computeSaving,
   electronicsFairPrice,
@@ -141,6 +143,17 @@ export default async function ProductPage({ params }: PageProps) {
    * الحقل product.fairPrice في البيانات محفوظ كما هو ولا يُعرض.
    */
   const valuation = electronicsFairPrice(product.offers);
+  // مقارنة السوق للرسم البياني: نفس المحرك، مع اسم المتجر ورابطه وتاريخ الرصد
+  const market = summarizeMarket(
+    product.offers.map((o) => ({
+      storeId: o.store,
+      storeAr: o.storeAr || o.store,
+      price: o.price,
+      url: o.url,
+      asOf: o.checkedAt ?? null,
+      verified: o.verificationStatus === "verified",
+    }))
+  );
   const fairPrice = valuation.fairPrice;
 
   /*
@@ -340,6 +353,15 @@ export default async function ProductPage({ params }: PageProps) {
             </section>
 
             {/* سجل الأسعار المعتمدة (وضع MVP) */}
+            <PriceComparison
+              summary={market}
+              emptyText={
+                isDb
+                  ? "لا توجد أسعار موثقة وحديثة لهذا المنتج بعد، لذلك السعر العادل غير متاح مؤقتًا. الأسعار تظهر هنا فور اعتمادها بعد المراجعة."
+                  : undefined
+              }
+            />
+
             {isDb && <PriceHistory points={product.history} />}
 
             {/* الأسعار المرجعية القديمة: منفصلة وغير معتمدة */}

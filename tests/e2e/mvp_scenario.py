@@ -252,9 +252,19 @@ with sync_playwright() as p:
         page.goto(f"{BASE}/product/{state['pid']}")
         text = page.locator("main").inner_text()
         assert "1,500" not in text
-        # الوسيط من الأسعار المعتمدة فقط: 950، 1050، 1100 → 1050
+        # متوسط الأسعار المعتمدة غير الشاذة فقط: 950، 1050، 1100 → 1,033 (المرفوض 1,500 لا يدخل)
         fair = page.locator("section", has_text="السعر العادل").first.inner_text()
-        assert "1,050" in fair, fair
+        assert "1,033" in fair, fair
+        # الرسم البياني: 3 أشرطة موثقة + خط متوسط السوق + خط السعر العادل، ولا شريط للسعر المرفوض
+        chart = page.locator("[data-price-comparison]").first
+        expect(chart.locator("[data-chart]")).to_be_visible()
+        assert chart.locator("[data-chart-row=used]").count() == 3
+        assert chart.locator("[data-chart-marker='السعر العادل']").count() == 1
+        assert chart.locator("[data-chart-marker='متوسط السوق']").count() == 1
+        assert chart.locator("[data-sources]").get_attribute("data-sources") == "3"
+        assert "1,500" not in chart.inner_text()
+        chart.scroll_into_view_if_needed()
+        chart.screenshot(path=os.path.join(OUT, "11b-price-comparison-chart.png"))
         shot(page, "11-product-after-reject")
         page.goto(f"{BASE}/search?q=" + "هاتف عرض")
         expect(page.get_by_text("هاتف عرض تجريبي X1")).to_be_visible()
@@ -267,6 +277,12 @@ with sync_playwright() as p:
         mp = m.new_page()
         mp.goto(f"{BASE}/product/{state['pid']}")
         mp.screenshot(path=os.path.join(OUT, "13-mobile-product.png"), full_page=True)
+        mchart = mp.locator("[data-price-comparison]").first
+        expect(mchart.locator("[data-chart]")).to_be_visible()
+        box = mchart.bounding_box()
+        assert box and box["width"] <= 390, box  # لا يتجاوز عرض الجوال
+        assert mp.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "تمرير أفقي في صفحة المنتج"
+        mchart.screenshot(path=os.path.join(OUT, "13b-mobile-chart.png"))
         mp.goto(f"{BASE}/")
         mp.screenshot(path=os.path.join(OUT, "14-mobile-home.png"), full_page=False)
         m.close()

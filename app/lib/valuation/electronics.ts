@@ -5,14 +5,15 @@
  * - لا يدخل في الحساب إلا الأسعار ذات الحالة "verified".
  * - يلزم توفر أسعار موثقة من MIN_VERIFIED_STORES متاجر مختلفة على الأقل.
  * - إذا تطابقت الأسعار حرفيًا في كل المتاجر يُعتبر غير مستقل ويُخفى.
- * - السعر العادل = الوسيط للأسعار الموثقة.
+ * - يُستبعد السعر الشاذ (يبتعد عن الوسيط أكثر من 15%).
+ * - السعر العادل = متوسط الأسعار الموثقة غير الشاذة (محرك market.ts المشترك).
  *
  * حاليًا جميع الأسعار غير موثقة، لذلك يكون السعر العادل مخفيًا تلقائيًا.
  * يظهر تلقائيًا بمجرد اعتماد أسعار من مصادر موثوقة (تغيير الحالة إلى
  * "verified")، دون أي تعديل في الواجهة.
  */
 
-import { allPricesIdentical } from "../pricing";
+import { summarizeMarket } from "./market";
 import type { VerificationStatus } from "../trust";
 
 export const MIN_VERIFIED_STORES = 3;
@@ -39,14 +40,6 @@ export type ElectronicsFairPrice = {
   totalOffers: number;
 };
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
-}
-
 function isValidPrice(p: number | null): p is number {
   return typeof p === "number" && Number.isFinite(p) && p > 0;
 }
@@ -55,30 +48,11 @@ export function electronicsFairPrice(
   offers: ValuationOffer[]
 ): ElectronicsFairPrice {
   const totalOffers = offers.filter((o) => isValidPrice(o.price)).length;
-
-  // أقل سعر موثق لكل متجر (لا يُحسب المتجر مرتين)
-  const byStore = new Map<string, number>();
-  for (const o of offers) {
-    if (o.verificationStatus !== "verified" || !isValidPrice(o.price)) continue;
-    const key = o.store.trim().toLowerCase();
-    const prev = byStore.get(key);
-    byStore.set(key, prev === undefined ? o.price : Math.min(prev, o.price));
-  }
-
-  const values = [...byStore.values()];
-  const base = { verifiedStores: values.length, totalOffers };
-
-  if (values.length === 0) {
-    return { ...base, fairPrice: null, status: "unverified-data" };
-  }
-  if (values.length < MIN_VERIFIED_STORES) {
-    return { ...base, fairPrice: null, status: "not-enough-data" };
-  }
-  if (allPricesIdentical(values)) {
-    return { ...base, fairPrice: null, status: "not-independent" };
-  }
-
-  return { ...base, fairPrice: Math.round(median(values)), status: "available" };
+  // نفس محرك مقارنة السوق المشترك (market.ts): موثق فقط، سعر واحد لكل متجر، استبعاد الشاذ، 3 مصادر
+  const m = summarizeMarket(
+    offers.map((o) => ({ storeId: o.store, storeAr: o.store, price: o.price, verified: o.verificationStatus === "verified" }))
+  );
+  return { fairPrice: m.fairPrice, status: m.status, verifiedStores: m.verifiedSources, totalOffers };
 }
 
 export function fairPriceUnavailableReason(

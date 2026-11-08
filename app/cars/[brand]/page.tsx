@@ -10,13 +10,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import {
-  calculateFairPrice,
-  getFairPriceIcon,
-  getFairPriceLabel,
-  type FairPriceResult,
-} from "@/app/data/priceUtils";
-
 import brands, { type CarModel } from "@/app/data/cars";
 import { Badge, BrandMonogram, Price, TrustNote } from "@/app/components/ui";
 import { Car3D, CarKey3D } from "@/app/components/illustrations";
@@ -24,12 +17,8 @@ import { brandInitial, brandNameAr, brandSummaries } from "@/app/lib/carBrands";
 import { dataSource, getVerifiedCarOffers, showLegacyReference, type VerifiedCarOffer } from "@/app/lib/catalog";
 import { carSlugs } from "@/app/lib/catalog/carSlugs";
 import { TRUST_TEXT } from "@/app/lib/trust";
-
-const MARKET_SOURCE_NAMES: Record<string, string> = {
-  motory: "موتري",
-  syarah: "سيارة",
-  hatla2ee: "هتلاقي",
-};
+import { PriceComparison } from "@/app/components/PriceComparison";
+import { summarizeMarket, type MarketSummary } from "@/app/lib/valuation/market";
 
 const verifiedDateFmt = new Intl.DateTimeFormat("ar-SA-u-nu-latn", {
   timeZone: "Asia/Riyadh",
@@ -43,25 +32,6 @@ const MARKET_REFERENCES = [
   { name: "سيارة", url: "https://syarah.com/" },
   { name: "هتلاقي", url: "https://ksa.hatla2ee.com/ar/" },
 ];
-
-function getFairPrice(car: CarModel): FairPriceResult {
-  if (typeof car.price !== "number") {
-    return {
-      fairPrice: null,
-      marketLow: null,
-      marketHigh: null,
-      marketAverage: null,
-      marketCount: 0,
-      sourceCount: 0,
-      sources: [],
-      status: "not-enough-data",
-      difference: null,
-      differencePercent: null,
-    };
-  }
-
-  return calculateFairPrice(car.name, car.year, car.price, car.trim);
-}
 
 export function generateStaticParams() {
   return Object.keys(brands).map((brand) => ({ brand }));
@@ -241,7 +211,7 @@ export default async function Page({
             المراجع
           </h2>
           <p className="mt-1 text-sm text-ink-3">
-            المصادر التي تُنسب إليها الأسعار ومقارنة السوق لهذه العلامة.
+            ① مصدر السعر الرسمي للعلامة. ②–④ مواقع مقارنة يمكنك الرجوع إليها بنفسك: لا ننقل أسعارها ولا تدخل في حساباتنا.
           </p>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <li>
@@ -285,19 +255,16 @@ function ModelCard({
   verified: VerifiedCarOffer[];
   showReference: boolean;
 }) {
-  const fair = getFairPrice(car);
+  // مقارنة السوق والسعر العادل من الأسعار المعتمدة فقط (نفس محرك الإلكترونيات)
+  const market = summarizeMarket(
+    verified.map((o) => ({ storeId: o.storeId, storeAr: o.storeAr, price: o.price, url: o.url, asOf: o.asOf, verified: true }))
+  );
 
   return (
-    <article className="card card-hover relative flex h-full flex-col overflow-hidden">
+    <article className="card card-hover relative flex h-full flex-col overflow-hidden" data-car-card>
       <span
         aria-hidden
-        className={`absolute inset-x-0 top-0 h-1 ${
-          fair.fairPrice !== null
-            ? "bg-gradient-to-l from-mint to-[#1f9e69]"
-            : fair.status === "not-independent"
-            ? "bg-yellow"
-            : "bg-line"
-        }`}
+        className={`absolute inset-x-0 top-0 h-1 ${market.fairPrice !== null ? "bg-gradient-to-l from-mint to-[#1f9e69]" : verified.length > 0 ? "bg-mint/60" : "bg-line"}`}
       />
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="min-w-0">
@@ -336,27 +303,24 @@ function ModelCard({
       )}
 
       {showReference ? (
-      <>
-      <div className="flex items-end justify-between gap-3 px-4">
-        <div>
-          <div className="text-xs text-ink-3">السعر المرجعي</div>
-          <div className="mt-0.5 text-2xl font-bold leading-tight">
-            {typeof car.price === "number" ? (
-              <Price value={car.price} />
-            ) : (
-              <span className="text-base font-medium text-ink-3">السعر غير متوفر</span>
-            )}
+        <>
+          <div className="flex items-end justify-between gap-3 px-4">
+            <div>
+              <div className="text-xs text-ink-3">السعر المرجعي (غير موثق)</div>
+              <div className="mt-0.5 text-2xl font-bold leading-tight">
+                {typeof car.price === "number" ? (
+                  <Price value={car.price} />
+                ) : (
+                  <span className="text-base font-medium text-ink-3">السعر غير متوفر</span>
+                )}
+              </div>
+            </div>
+            <FairPill market={market} />
           </div>
-        </div>
-        <FairPill fair={fair} />
-      </div>
-
-      <div className="mt-1 px-4 text-[0.7rem] text-ink-3">المصدر المذكور: {sourceName}</div>
-      </>
+          <div className="mt-1 px-4 text-[0.7rem] text-ink-3">المصدر المذكور: {sourceName}</div>
+        </>
       ) : (
-        verified.length === 0 && (
-          <div className="px-4 text-sm text-ink-3">لا يوجد سعر معتمد لهذا الموديل بعد.</div>
-        )
+        verified.length === 0 && <div className="px-4 text-sm text-ink-3">لا يوجد سعر معتمد لهذا الموديل بعد.</div>
       )}
 
       {(car.engine || car.power || car.fuel) && (
@@ -367,8 +331,7 @@ function ModelCard({
         </div>
       )}
 
-      {showReference && (
-      <details className="group mt-auto border-t border-line [&:not([open])]:mt-4">
+      <details className="group mt-auto border-t border-line [&:not([open])]:mt-4" data-market-details>
         <summary className="flex min-h-11 items-center justify-between gap-2 px-4 text-sm font-medium text-ink-2 transition-colors hover:text-ink">
           <span className="inline-flex items-center gap-1.5">
             <Scale size={15} aria-hidden />
@@ -376,124 +339,28 @@ function ModelCard({
           </span>
           <ChevronDown size={16} className="transition-transform group-open:rotate-180" aria-hidden />
         </summary>
-
-        <div className="space-y-3 px-4 pb-4">
-          {fair.marketCount > 0 ? (
-            <>
-              <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-                {fair.sources.map((source, index) => (
-                  <li key={`${source.source}-${source.price}-${index}`}>
-                    <a
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex min-h-11 items-center justify-between gap-3 bg-surface-2 px-3 text-sm transition-colors hover:bg-surface-3"
-                    >
-                      <span className="inline-flex items-center gap-1.5 text-ink-2">
-                        {MARKET_SOURCE_NAMES[source.source] ?? source.source}
-                        <ExternalLink size={12} className="text-ink-3" aria-hidden />
-                      </span>
-                      <Price value={source.price} className="font-semibold" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-
-              <dl className="grid grid-cols-3 gap-2 text-center">
-                <MarketStat title="أقل سعر" value={fair.marketLow} />
-                <MarketStat title="متوسط السوق" value={fair.marketAverage} />
-                <MarketStat title="أعلى سعر" value={fair.marketHigh} />
-              </dl>
-            </>
-          ) : (
-            <p className="text-sm leading-7 text-ink-3">
-              لا توجد بيانات سوقية موثقة كافية لهذا الموديل حاليًا لحساب المقارنة.
-            </p>
-          )}
-
-          <FairDetails fair={fair} />
+        <div className="px-3 pb-3">
+          <PriceComparison
+            summary={market}
+            compact
+            title={`مقارنة السوق — ${car.name} ${car.year}`}
+            emptyText="لا توجد أسعار معتمدة وحديثة لهذا الموديل بعد، لذلك السعر العادل غير متاح مؤقتًا. يظهر هنا فور اعتماد أسعار من مصادر موثوقة."
+          />
         </div>
       </details>
-      )}
     </article>
   );
 }
 
-function FairPill({ fair }: { fair: FairPriceResult }) {
-  if (fair.fairPrice !== null) {
+function FairPill({ market }: { market: MarketSummary }) {
+  if (market.fairPrice !== null) {
     return (
-      <div className="shrink-0 rounded-xl border border-mint/50 bg-mint-50 px-2.5 py-1.5 text-left">
-        <div className="text-[0.65rem] text-brand-soft">السعر العادل</div>
-        <Price value={fair.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/80 text-[0.7em]" />
-      </div>
+      <span className="inline-flex items-center gap-1 rounded-full bg-mint-50 px-2.5 py-1 text-xs font-semibold text-brand-soft">
+        عادل <Price value={market.fairPrice} className="text-sm font-bold text-brand-soft" unitClassName="text-brand-soft/80 text-[0.7em]" />
+      </span>
     );
   }
-
-  if (fair.status === "not-independent") {
-    return <Badge tone="warn">مصادر قيد المراجعة</Badge>;
-  }
-
-  return <Badge>لا يوجد سعر عادل</Badge>;
-}
-
-function FairDetails({ fair }: { fair: FairPriceResult }) {
-  return (
-    <div
-      className={`rounded-lg border p-3 text-sm ${
-        fair.fairPrice !== null ? "border-mint/40 bg-mint-50" : "border-line bg-surface-2"
-      }`}
-    >
-      <div className="flex items-center gap-1.5 font-semibold">
-        <Scale size={15} aria-hidden /> السعر العادل
-      </div>
-
-      {fair.fairPrice !== null ? (
-        <>
-          <div className="mt-1 text-xl font-bold text-brand-soft">
-            <Price value={fair.fairPrice} unitClassName="text-brand-soft/80 text-[0.7em]" />
-          </div>
-          <div className="mt-1 font-medium">
-            {getFairPriceIcon(fair.status)} {getFairPriceLabel(fair.status)}
-          </div>
-          {fair.differencePercent !== null && (
-            <div className="num mt-1 text-ink-2">
-              الفرق عن السعر العادل: {Math.abs(fair.differencePercent).toFixed(1)}%
-              {fair.difference !== null &&
-                (fair.difference > 0 ? " أعلى" : fair.difference < 0 ? " أقل" : " مطابق")}
-            </div>
-          )}
-          <p className="mt-2 text-xs leading-6 text-ink-3">
-            تقدير أولي (الوسيط) من بيانات منشورة في {fair.sourceCount} مصادر، لم يتم
-            التحقق منها بعد.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="mt-1 text-ink-2">لا نعرض رقمًا تقديريًا للسعر العادل.</p>
-          {fair.status === "not-independent" && (
-            <p className="mt-1 text-xs leading-6 text-warn">
-              {getFairPriceIcon(fair.status)} السعر متطابق حرفيًا في جميع المصادر، لذلك لا
-              يمكن التأكد من أنها مصادر مستقلة. السعر العادل مخفي حتى تتم مراجعتها.
-            </p>
-          )}
-          <p className="mt-1 text-xs leading-6 text-ink-3">
-            يظهر السعر العادل فقط بعد توفر بيانات سوقية كافية من 3 مصادر مستقلة على الأقل.
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function MarketStat({ title, value }: { title: string; value: number | null }) {
-  return (
-    <div className="rounded-lg bg-surface-2 px-2 py-2">
-      <dt className="text-[0.7rem] text-ink-3">{title}</dt>
-      <dd className="mt-0.5 text-sm font-semibold">
-        {value !== null ? <Price value={value} /> : "غير متاح"}
-      </dd>
-    </div>
-  );
+  return <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[0.7rem] text-ink-3">السعر العادل غير متاح مؤقتًا</span>;
 }
 
 function ReferenceLink({
