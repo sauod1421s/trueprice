@@ -116,6 +116,7 @@ async function setup() {
     await migrator.query(`alter role tp_app password '${env.TP_APP_PASSWORD.replace(/'/g, "''")}'`);
 
     await runFile(admin, "db/local/003_local_preview_users.sql", "مستخدمو المعاينة المحليون وتهيئة أول مشرفين");
+    await runFile(migrator, "db/schema/004_assisted_research.sql", "004 مساعد الرصد (مصدر خدمة، الاعتماد بدليل من مشرف)");
 
     await runFile(migrator, "db/seed/100_catalog_seed.sql", "100 نقل الكتالوج والسيارات والأسعار المرجعية (غير موثقة)");
     const counts = await migrator.query(`select

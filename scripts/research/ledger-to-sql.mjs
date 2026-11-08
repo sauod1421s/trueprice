@@ -1,0 +1,116 @@
+#!/usr/bin/env node
+/**
+ * يحوّل سجل رصد الأسعار (CSV في data/research/) إلى كتلة SQL واحدة تستورده عبر مسار الخدمة
+ * لمصدر «مساعد الرصد» (assisted-research-<vertical>) — نفس دوال الاستيراد الرسمية:
+ * register → stage → seal → commit. الأسعار تدخل «غير موثقة» ولا تظهر حتى يعتمدها مشرف.
+ *
+ * أعمدة السجل (رأس إلزامي):
+ *   product_id,product_name,store_id,price_sar,list_price_sar,url,observed_at,availability,vat_included,match,notes
+ * - product_id: المعرّف الداخلي في القاعدة. product_name: نسخة للتحقق البشري فقط.
+ * - url: رابط صفحة المنتج نفسها (https) — لا صفحات بحث ولا مواقع مقارنة.
+ * - observed_at: وقت الرصد ISO مع المنطقة (+03:00). vat_included: yes (أسعار التجزئة السعودية شاملة الضريبة).
+ * - match: ما تمت مطابقته (الموديل/السعة/الذاكرة/الفئة/السنة). notes: ملاحظات.
+ *
+ * الاستخدام: node scripts/research/ledger-to-sql.mjs data/research/<file>.csv electronics|cars > /tmp/import.sql
+ */
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
+
+const [file, vertical] = process.argv.slice(2);
+if (!file || !["electronics", "cars"].includes(vertical)) {
+  console.error("usage: ledger-to-sql.mjs <ledger.csv> electronics|cars");
+  process.exit(2);
+}
+const raw = readFileSync(file, "utf8");
+const sha = createHash("sha256").update(raw).digest("hex");
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((c) => c !== "")) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); if (row.some((c) => c !== "")) rows.push(row); }
+  return rows;
+}
+
+const HEAD = ["product_id", "product_name", "store_id", "price_sar", "list_price_sar", "url", "observed_at", "availability", "vat_included", "match", "notes"];
+const [head, ...body] = parseCsv(raw);
+if (head.join(",") !== HEAD.join(",")) { console.error("bad header; expected:\n" + HEAD.join(",")); process.exit(1); }
+
+const BLOCKED_HOSTS = /(^|\.)(motory\.com|syarah\.com|hatla2ee\.com|pricena\.com|yaoota\.com|themacindex\.com|getprice|pricespy)/i;
+const errors = [];
+const seen = new Set();
+const rows = body.map((cells, idx) => {
+  const r = Object.fromEntries(HEAD.map((h, i) => [h, (cells[i] ?? "").trim()]));
+  const line = idx + 2;
+  const err = (m) => errors.push(`line ${line}: ${m}`);
+  if (!/^\d+$/.test(r.product_id)) err("product_id must be a number");
+  if (!/^[a-z0-9][a-z0-9-]{1,60}$/.test(r.store_id)) err("store_id invalid");
+  if (!/^\d+(\.\d{1,2})?$/.test(r.price_sar) || Number(r.price_sar) <= 0) err("price_sar invalid");
+  if (r.list_price_sar && !/^\d+(\.\d{1,2})?$/.test(r.list_price_sar)) err("list_price_sar invalid");
+  let u;
+  try { u = new URL(r.url); } catch { err("url invalid"); }
+  if (u && u.protocol !== "https:") err("url must be https");
+  if (u && BLOCKED_HOSTS.test(u.hostname)) err(`comparison/aggregator site not allowed as source: ${u.hostname}`);
+  if (u && /[?&](q|k|query|search)=|\/search/i.test(u.pathname + u.search)) err("search pages are not evidence; use the product page");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?\+03:00$/.test(r.observed_at)) err("observed_at must be ISO with +03:00");
+  else if (Date.parse(r.observed_at) > Date.now() + 5 * 60_000) err("observed_at in the future");
+  if (!["in_stock", "out_of_stock", "unknown"].includes(r.availability)) err("availability invalid");
+  if (r.vat_included !== "yes") err("vat_included must be yes (Saudi retail prices include VAT)");
+  if (r.match.length < 3) err("match note required");
+  const key = `${r.product_id}|${r.store_id}`;
+  if (seen.has(key)) err(`duplicate product/store ${key}`);
+  seen.add(key);
+  const canonical = u ? `${u.origin}${u.pathname}`.replace(/\/+$/, "") : "";
+  return {
+    store_id: r.store_id,
+    offer_key: `research-p${r.product_id}-${r.store_id}`,
+    condition: "new",
+    amount: r.price_sar,
+    ...(r.list_price_sar ? { list_amount: r.list_price_sar } : {}),
+    currency: "SAR",
+    as_of: r.observed_at,
+    availability: r.availability,
+    name: r.product_name,
+    url: r.url,
+    canonical_url: canonical,
+    product_id: r.product_id,
+    date_confirmed: true,
+    evidence: { vat_included: true, match: r.match, notes: r.notes || null, researcher: "assisted-research" },
+  };
+});
+if (errors.length) { console.error(errors.join("\n")); process.exit(1); }
+if (!rows.length) { console.error("no rows"); process.exit(1); }
+
+const json = JSON.stringify(rows);
+if (json.includes("$tp_rows$")) { console.error("delimiter collision"); process.exit(1); }
+const name = basename(file);
+process.stdout.write(`-- ${name} sha256=${sha} rows=${rows.length} (مساعد الرصد → غير موثقة حتى يعتمدها مشرف)
+do $tp_import$
+declare v_run uuid; v_sha text; v_res jsonb;
+begin
+  v_run := tp.register_import_core(null, 'service', 'assisted-research-${vertical}', 'imports/research/${sha}', '${name}',
+    ${Buffer.byteLength(raw)}, '${sha}', 'research-ledger-1', 'csv', '{"max_rows":1000}'::jsonb,
+    '{"accepted":${rows.length},"rejected":0}'::jsonb, '[]'::jsonb, '[]'::jsonb);
+  perform tp.stage_rows_core(null, 'service', v_run, 1, $tp_rows$${json}$tp_rows$::jsonb);
+  v_sha := tp.seal_import_core(null, 'service', v_run, ${rows.length});
+  v_res := tp.commit_import_core(v_run, v_sha, null, 'service');
+  raise notice 'run % committed: %', v_run, v_res;
+end $tp_import$;
+select r.id as run_id, r.status, r.totals, (select count(*) from tp.price_observations o where o.import_run_id = r.id) as observations
+from tp.import_runs r join tp.import_files f on f.id = r.file_id where f.sha256 = '${sha}';
+`);

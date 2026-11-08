@@ -417,6 +417,38 @@ export async function reviewPrice(fd: FormData) {
   back(returnTo, "ok", status === "verified" ? "اعتُمد السعر وأصبح ظاهرًا في صفحة المنتج" : "رُفض السعر ولن يظهر ولن يدخل في السعر العادل");
 }
 
+/**
+ * اعتماد مجمّع لأسعار راجعها المشرف: كل سعر محدد يُعتمد منفردًا بنفس الدالة (نفس الشروط والتدقيق)،
+ * ودليله رابط صفحة المصدر نفسه. يشترط إقرارًا صريحًا بفتح الروابط ومطابقتها.
+ */
+export async function approveSelected(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const returnTo = text(fd, "returnTo", 120) || "/admin/review";
+  if (fd.get("attest") !== "yes") back(returnTo, "err", "أكّد أولًا أنك فتحت روابط الأسعار المحددة وتأكدت من مطابقتها");
+  const picked = fd.getAll("pick").map(String).filter((v) => /^\d+:\d*$/.test(v)).slice(0, 100);
+  if (picked.length === 0) back(returnTo, "err", "لم تحدد أي سعر");
+  let okCount = 0;
+  const failed: string[] = [];
+  for (const v of picked) {
+    const [id, prev] = v.split(":");
+    const url = text(fd, `url-${id}`, 1000);
+    try {
+      await decide(claims, {
+        observationId: Number(id),
+        status: "verified",
+        expectedPreviousEventId: prev ? Number(prev) : null,
+        note: "اعتماد مجمّع بعد فتح رابط المصدر ومطابقته",
+        evidenceUrl: url || undefined,
+      });
+      okCount++;
+    } catch (e) {
+      failed.push(`#${id}: ${friendlyDbError(e)}`);
+    }
+  }
+  if (failed.length) back(returnTo, "err", `اعتُمد ${okCount} وتعذّر ${failed.length}: ${failed.slice(0, 3).join(" | ")}`);
+  back(returnTo, "ok", `اعتُمد ${okCount} سعرًا وأصبحت ظاهرة في الموقع`);
+}
+
 /* ------------------------------------------------------------------ المستخدمون والأدوار */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -582,21 +582,30 @@ export type ReviewItem = {
   previousAmount: number | null;
   importedBy: string | null;
   isDemo: boolean;
+  /** رابط صفحة المصدر كما رُصد (يُقترح دليلًا عند الاعتماد) */
+  url: string | null;
+  kind: "electronics" | "cars";
+  /** ما طابقه مساعد الرصد (الموديل/السعة/الفئة/السنة) وملاحظاته */
+  match: string | null;
+  note: string | null;
 };
 
 export const LEGACY_SOURCE_ID = "legacy-site-data";
+/** مصادر الأسعار المرجعية القديمة (قبل MVP): تُعرض في قائمة منفصلة */
+export const LEGACY_SOURCE_IDS = [LEGACY_SOURCE_ID, "legacy-site-cars"];
 
 export async function reviewQueue(
   claims: DbClaims,
   status: "unverified" | "verified" | "rejected" = "unverified",
-  opts: { legacy: boolean } = { legacy: false }
+  opts: { legacy: boolean; kind?: "electronics" | "cars" } = { legacy: false }
 ) {
   return withClaims(claims, async (c) => {
     const r = await c.query<{
       observation_id: string; product: string | null; product_id: string | null; legacy_id: number | null;
       store_id: string; store_ar: string; amount: string; currency: string; as_of: Date; source_id: string;
       verification: string; exclusion_reasons: string[]; last_event: string | null; prev_amount: string | null;
-      imported_by: string | null; is_demo: boolean | null;
+      imported_by: string | null; is_demo: boolean | null; url: string | null; category_kind: string;
+      evidence: Record<string, unknown> | null;
     }>(
       `select e.observation_id, coalesce(p.name_ar, p.name) as product, e.product_id, p.legacy_id,
               e.effective_store_id as store_id, st.name_ar as store_ar, e.amount, e.currency, e.as_of, e.source_id,
@@ -609,15 +618,21 @@ export async function reviewQueue(
                  join admin_api.import_runs ir on ir.id = o.import_run_id
                  left join tp.profiles pr on pr.user_id = ir.started_by
                where o.id = e.observation_id) as imported_by,
-              d.is_demo
+              d.is_demo, e.category_kind::text as category_kind,
+              (select o.url from admin_api.price_observations o where o.id = e.observation_id) as url,
+              (select sr.payload -> 'evidence' from admin_api.price_observations o
+                 join admin_api.import_staged_rows sr on sr.run_id = o.import_run_id
+                  and sr.payload ->> 'offer_key' = (select os.offer_key from admin_api.offer_streams os where os.id = e.stream_id)
+               where o.id = e.observation_id limit 1) as evidence
        from admin_api.offer_eligibility e
        join admin_api.stores st on st.id = e.effective_store_id
        left join admin_api.products p on p.id = e.product_id
        left join admin_api.product_details d on d.product_id = e.product_id
-       where e.verification = $1::tp.verification and e.category_kind = 'electronics'
-         and ((e.source_id = $2) = $3)
-       order by e.as_of desc, e.observation_id desc limit 200`,
-      [status, LEGACY_SOURCE_ID, opts.legacy]
+       where e.verification = $1::tp.verification
+         and ((e.source_id = any($2::text[])) = $3)
+         and ($4::text is null or e.category_kind::text = $4)
+       order by e.category_kind, coalesce(p.name_ar, p.name), e.effective_store_id, e.observation_id desc limit 300`,
+      [status, LEGACY_SOURCE_IDS, opts.legacy, opts.kind ?? null]
     );
     return r.rows.map<ReviewItem>((x) => ({
       observationId: Number(x.observation_id),
@@ -633,8 +648,12 @@ export async function reviewQueue(
       reasons: x.exclusion_reasons,
       lastEventId: x.last_event === null ? null : Number(x.last_event),
       previousAmount: x.prev_amount === null ? null : Number(x.prev_amount),
-      importedBy: x.imported_by,
+      importedBy: x.imported_by ?? (x.source_id.startsWith("assisted-research-") ? "مساعد الرصد" : null),
       isDemo: x.is_demo === true,
+      url: x.url,
+      kind: x.category_kind === "cars" ? "cars" : "electronics",
+      match: typeof x.evidence?.match === "string" ? x.evidence.match : null,
+      note: typeof x.evidence?.notes === "string" ? x.evidence.notes : null,
     }));
   });
 }
@@ -659,8 +678,8 @@ export async function decide(
 export async function legacyPendingCount(claims: DbClaims): Promise<number> {
   return withClaims(claims, async (c) => {
     const r = await c.query<{ n: string }>(
-      `select count(*) as n from admin_api.offer_eligibility where verification = 'unverified' and source_id = $1`,
-      [LEGACY_SOURCE_ID]
+      `select count(*) as n from admin_api.offer_eligibility where verification = 'unverified' and source_id = any($1::text[])`,
+      [LEGACY_SOURCE_IDS]
     );
     return Number(r.rows[0].n);
   });

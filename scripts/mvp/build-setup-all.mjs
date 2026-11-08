@@ -31,6 +31,7 @@ const PARTS = [
   ["2", "db/mvp/002_mvp_overlay.sql", "طبقة MVP: واجهات الموقع ودوال اللوحة والتعطيل المؤقت القابل للعكس"],
   ["3", "db/schema/003_visitors_requests.sql", "إحصائيات الزوار وطلبات التواصل والشكاوى"],
   ["4", "db/supabase/010_app_role.sql", "دور اتصال الموقع tp_app (بلا كلمة مرور بعد)"],
+  ["5ب", "db/schema/004_assisted_research.sql", "مساعد الرصد: مصدر خدمة لأسعار مرصودة بأدلة، والاعتماد من مشرف"],
   ["6", "db/seed/100_catalog_seed.sql", "نقل الكتالوج والسيارات والأسعار المرجعية (غير موثقة)"],
 ];
 
@@ -122,7 +123,7 @@ export function buildSetupAll() {
   const manifest = [
     ...parts.slice(0, 4).map((p) => `--   [${p.step}] ${p.file}  sha256=${p.sha}  (${p.bytes} bytes)`),
     `--   [5] تهيئة المشرفين (كتلة مكتوبة هنا)`,
-    `--   [${parts[4].step}] ${parts[4].file}  sha256=${parts[4].sha}  (${parts[4].bytes} bytes)`,
+    ...parts.slice(4).map((p) => `--   [${p.step}] ${p.file}  sha256=${p.sha}  (${p.bytes} bytes)`),
     `--   [7] db/supabase/020_set_app_password.sql  sha256=${sha(src020)}  + نتيجة الفحوص`,
   ].join("\n");
 
@@ -156,7 +157,7 @@ ${p.body.endsWith("\n") ? p.body : p.body + "\n"}
     parts.slice(0, 4).map(section).join("") +
     BOOTSTRAP +
     "\n" +
-    section(parts[4]) +
+    parts.slice(4).map(section).join("") +
     finalBlock(src020)
   );
 }
