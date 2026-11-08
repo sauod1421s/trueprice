@@ -11,6 +11,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   addIdentifier,
+  approveResearchSource,
   commitImport,
   createProduct,
   createSource,
@@ -181,6 +182,30 @@ export async function changeSourceStatus(fd: FormData) {
     back("/admin/stores", "err", friendlyDbError(e));
   }
   back("/admin/stores", "ok", status === "approved" ? `أُعيد اعتماد المصدر ${sourceId}` : `أُوقف المصدر ${sourceId}: لن يقبل أي استيراد جديد`);
+}
+
+/** اعتماد مصدر «مساعد الرصد» بعد مراجعة شروط استخدام موقع المتجر: رابط الشروط + إقرار صريح. */
+export async function approveResearch(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const sourceId = text(fd, "sourceId", 60);
+  const termsUrl = text(fd, "termsUrl", 500);
+  if (fd.get("attest") !== "yes") {
+    back("/admin/stores", "err", "يجب الإقرار بمراجعة شروط الموقع قبل اعتماد المصدر.");
+  }
+  let ok = false;
+  try {
+    const u = new URL(termsUrl);
+    ok = u.protocol === "https:" && !u.username && !u.password;
+  } catch {
+    ok = false;
+  }
+  if (!ok) back("/admin/stores", "err", "رابط الشروط يجب أن يكون رابط https صالحًا لصفحة شروط الاستخدام في موقع المتجر.");
+  try {
+    await approveResearchSource(claims, sourceId, termsUrl);
+  } catch (e) {
+    back("/admin/stores", "err", friendlyDbError(e));
+  }
+  back("/admin/stores", "ok", `اعتُمد المصدر ${sourceId} بعد مراجعة الشروط. أسعاره تبقى غير منشورة حتى توثَّق كل واحدة منها.`);
 }
 
 export async function addStore(fd: FormData) {

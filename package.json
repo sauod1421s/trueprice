@@ -21,7 +21,10 @@
     "data:seed:check": "node scripts/data/build-catalog-seed.mjs --check",
     "db:setup-all": "node scripts/mvp/build-setup-all.mjs",
     "db:setup-all:check": "node scripts/mvp/build-setup-all.mjs --check",
-    "db:setup-all:verify": "node scripts/mvp/verify-setup-all.mjs"
+    "db:setup-all:verify": "node scripts/mvp/verify-setup-all.mjs",
+    "db:004": "node scripts/mvp/build-004.mjs",
+    "db:004:check": "node scripts/mvp/build-004.mjs --check",
+    "db:004:verify": "node scripts/mvp/verify-004.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",

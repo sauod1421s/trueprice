@@ -1,0 +1,92 @@
+# نتيجة scripts/mvp/verify-004.mjs — 2026-11-08 13:22 بتوقيت الرياض
+# 004 sha256=8817a8105bc310c03be089f5cf2df05d0d3a3c3e647e0ab91e48e6aede5864e2
+# rollback sha256=284c5f2ccd78d963340469d67c6fb2e5cc40a67bc1014db02f1c143ba9850c33
+# بصمة الإنتاج قبل 004 (TP_PROD_FINGERPRINT) = 2c02b9e2b87b940e5a6ab5f12365a42d
+
+— النسخة المطابقة
+  ✓ ملف الإعداد نفسه الذي نُفّذ في الإنتاج: نجح بدور غير مدير
+  ✓ بصمة البنية مطابقة لقاعدة Supabase قبل 004 — 2c02b9e2b87b940e5a6ab5f12365a42d (1711 عنصرًا)
+— تطبيق 004 (كما في SQL Editor) وإعادة تشغيله
+  ✓ 004 نجح: مصدران بحالة مسودة، 0 معتمد، 0 مخالفات
+  ✓ إعادة تشغيل 004 نجحت
+  ✓ إعادة التشغيل لا تغيّر شيئًا (البصمة نفسها)
+— التغييرات المقصودة فقط
+  ✓ tp.register_import_core: مطابقة لنص 001 مع الأسطر المقصودة فقط — 2 سطر مختلف عن 001
+  ✓ tp.commit_import_core: مطابقة لنص 001 مع الأسطر المقصودة فقط — 2 سطر مختلف عن 001
+  ✓ admin_api.verify_observation: مطابقة لنص 001 مع الأسطر المقصودة فقط — 2 سطر مختلف عن 001
+  ✓ tp.privilege_violations: مطابقة لنص 001 مع الأسطر المقصودة فقط — 14 سطر مختلف عن 001
+  ✓ ingest_api.register_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ ingest_api.stage_import_rows: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ ingest_api.seal_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ ingest_api.commit_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ admin_api.register_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ admin_api.stage_import_rows: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ admin_api.seal_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ admin_api.commit_import: مطابقة لنص 001 مع الأسطر المقصودة فقط — 1 سطر مختلف عن 001
+  ✓ المصادر الحالية لم تتغير (service_submission = false)
+  ✓ لا تغيير في البيانات: tp_migrate والأسعار والمنتجات كما هي
+— محاولات غير مصرح بها (دور الخدمة tp_research)
+  ✓ لا يقرأ الأسعار — permission denied for schema tp
+  ✓ لا يقرأ الواجهات العامة — permission denied for schema pub
+  ✓ لا يكتب قرار اعتماد مباشرة — permission denied for schema tp
+  ✓ لا يعتمد سعرًا حتى بهوية مشرف مزوّرة — permission denied for schema admin_api
+  ✓ لا يعتمد مصدرًا — permission denied for schema tp
+  ✓ لا يستدعي الدوال الأساسية مباشرة — permission denied for schema tp
+  ✓ لا يستخدم مسار الشركاء — permission denied for schema ingest_api
+  ✓ لا يمنح نفسه أدوارًا — permission denied for schema admin_api
+  ✓ المصدر المسودة لا يقبل أي إدخال قبل اعتماده — source research-apple is not approved (status draft)
+  ✓ لا يُدخل في مصادر غير مساعد الرصد
+  ✓ anon لا يصل إلى research_api
+  ✓ authenticated لا يصل إلى research_api
+  ✓ web_reader لا يصل إلى research_api
+  ✓ ingest_service لا يصل إلى research_api
+  ✓ tp_app لا يصل إلى research_api
+  ✓ مسار الشركاء (ingest_service) يرفض مصادر مساعد الرصد — assisted-research sources accept submissions only through re
+— اعتماد المصدر بعد مراجعة الشروط (مشرف فقط)
+  ✓ اعتماد مصدر مساعد رصد بلا رابط الشروط ووقت مراجعتها يرفضه القيد — new row for relation "sources" violates check constraint "sources_rese
+  ✓ مستخدم بلا صلاحية source:manage لا يعتمد مصدرًا (RLS)
+  ✓ المشرف بلا تحقق ثنائي (aal1) لا يعتمد مصدرًا
+  ✓ المشرف يعتمد المصدرين، ويُسجَّل هو معتمدًا (approved_by)
+  ✓ اعتماد المصدرين مسجل في سجل التدقيق باسم المشرف
+— إدخال مساعد الرصد (tp_research) ثم الاعتماد البشري
+  ✓ الإدخال بدور tp_research عبر research_api نجح (عمليتان، متجر لكل مصدر)
+  ✓ هوية المُدخل: actor_kind=service بلا مستخدم (المساعد ليس مشرفًا ولا يملك حساب مستخدم)
+  ✓ سجل التدقيق: تسجيل/ختم/اعتماد الاستيراد باسم service:research-<متجر> — service:research-apple, service:research-jarir
+  ✓ لا يُدخل سعر متجر في مصدر متجر آخر — row 1: row store does not belong to single-store source rese
+  ✓ قبل الاعتماد: لا يظهر أي سعر في الموقع
+  ✓ مستخدم بلا صلاحية الاعتماد (viewer) لا يعتمد — permission denied: price:verify
+  ✓ المشرف بلا تحقق ثنائي (aal1) لا يعتمد — permission denied: price:verify
+  ✓ المشرف بلا رابط دليل لا يعتمد
+  ✓ المشرف (بتحقق ثنائي ودليل) يعتمد: المُدخل خدمة لا مستخدم، فلا مراجعة ذاتية
+  ✓ كل اعتماد مسجل باسم المشرف مع رابط الدليل
+  ✓ بعد الاعتماد: يظهر السعران في الموقع — 2
+— مصادر مساعد الرصد لا تستقبل إلا من research_api
+  ✓ حتى المشرف لا يرفع ملفًا في مصدر مساعد رصد من اللوحة — assisted-research sources accept submissions only through re
+  ✓ عملية رصد معلّقة (لم تُختم) للاختبار
+  ✓ المشرف لا يختم/يعتمد عملية رصد من مسار اللوحة — assisted-research runs are handled only through research_api
+  ✓ المشرف يستطيع إلغاء عملية رصد عالقة (مسجل باسمه)
+  ✓ دور مساعد الرصد لا يصل إلى دوال اللوحة
+  ✓ فاحص الصلاحيات بعد كل ما سبق: 0 مخالفات
+— التراجع
+  ✓ التراجع بلا تأكيد يُرفض ولا يغيّر شيئًا
+  ✓ التراجع المؤكد: لا research_api ولا tp_research ولا مصدر معتمد، 0 مخالفات
+  ✓ tp.register_import_core: عادت إلى نص 001 حرفيًا
+  ✓ tp.commit_import_core: عادت إلى نص 001 حرفيًا
+  ✓ admin_api.verify_observation: عادت إلى نص 001 حرفيًا
+  ✓ tp.privilege_violations: عادت إلى نص 001 حرفيًا
+  ✓ ingest_api.register_import: عادت إلى نص 001 حرفيًا
+  ✓ ingest_api.stage_import_rows: عادت إلى نص 001 حرفيًا
+  ✓ ingest_api.seal_import: عادت إلى نص 001 حرفيًا
+  ✓ ingest_api.commit_import: عادت إلى نص 001 حرفيًا
+  ✓ admin_api.register_import: عادت إلى نص 001 حرفيًا
+  ✓ admin_api.stage_import_rows: عادت إلى نص 001 حرفيًا
+  ✓ admin_api.seal_import: عادت إلى نص 001 حرفيًا
+  ✓ admin_api.commit_import: عادت إلى نص 001 حرفيًا
+  ✓ أسعار مساعد الرصد اختفت من الموقع (مصدرها موقوف) دون حذف سجلها
+  ✓ سجل الأسعار وقرارات الاعتماد باقٍ (لا حذف لتاريخ)
+  ✓ قيمة enum تبقى (لا تُحذف في PostgreSQL) — الفرق الوحيد المتوقع عن البنية الأصلية
+  ✓ البصمة بعد التراجع تختلف فقط بقيمة enum (تُفحص أدناه)
+  ✓ بعد التراجع (مع تجاهل قيمة enum): البنية مطابقة تمامًا لما قبل 004 — 2c02b9e2b87b940e5a6ab5f12365a42d = 2c02b9e2b87b940e5a6ab5f12365a42d
+  ✓ يمكن تطبيق 004 من جديد بعد التراجع
+  ✓ البنية بعد إعادة التطبيق مطابقة للتطبيق الأول
+✓ كل الفحوص نجحت

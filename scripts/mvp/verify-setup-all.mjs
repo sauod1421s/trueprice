@@ -151,10 +151,7 @@ async function main() {
     ok(Number(row.legacy_prices_expect_283) === 283, "283 سعرًا مرجعيًا", String(row.legacy_prices_expect_283));
     ok(Number(row.verified_expect_0) === 0, "0 قرار توثيق آلي", String(row.verified_expect_0));
     ok(row.admins === "first.admin@test.invalid, second.admin@test.invalid", "المشرفان بالترتيب", row.admins);
-    ok(/003-visitors-requests/.test(row.migrations) && /mvp-overlay/.test(row.migrations) && /004-assisted-research/.test(row.migrations),
-       "سجل الترحيل يتضمن 001/002/003/004", row.migrations);
-    const rs = await su("v_two", "select count(*)::int as n from tp.sources where kind = 'assisted_research' and status = 'approved' and approved_by = '00000000-0000-4000-8000-00000000c001'");
-    ok(rs.rows[0].n === 2, "مصدرا مساعد الرصد معتمدان باسم أول مشرف");
+    ok(/003-visitors-requests/.test(row.migrations) && /mvp-overlay/.test(row.migrations), "سجل الترحيل يتضمن 001/002/003", row.migrations);
     const m = /^postgresql:\/\/tp_app\.xlpzfnespldgaxkgskkg:([0-9a-f]{64})@[a-z0-9.-]+\.pooler\.supabase\.com:6543\/postgres$/.exec(
       row.database_url ?? "");
     ok(Boolean(m), "database_url بالشكل الصحيح (tp_app.<ref>، المنفذ 6543، كلمة مرور 64 خانة)");
@@ -272,52 +269,6 @@ async function main() {
     console.log("      (database_acl بعد: " + [...after].filter((x) => x.startsWith("database_acl")).join() + ")");
     await withClient("postgres", SU_PW, "postgres", (c) => c.query("drop database v_scope"));
 
-    // 3هـ) مسار مساعد الرصد (004): استيراد عبر مسار الخدمة كما يُنفَّذ من موصل Supabase بدور postgres،
-    //      يدخل غير موثق ولا يظهر، الاعتماد يشترط دليلًا، ويُعتمد من مشرف (المُدخل ليس هو)، ثم يظهر.
-    {
-      const { execFileSync } = await import("node:child_process");
-      const { writeFileSync, mkdtempSync } = await import("node:fs");
-      const { tmpdir } = await import("node:os");
-      const dir = mkdtempSync(join(tmpdir(), "tp-ledger-"));
-      const ledger = join(dir, "ledger.csv");
-      const pid = (await su("v_two", "select id from tp.products where legacy_id = 1")).rows[0].id;
-      const now = new Date(Date.now() - 60_000).toLocaleString("sv-SE", { timeZone: "Asia/Riyadh" }).replace(" ", "T").slice(0, 16) + "+03:00";
-      writeFileSync(ledger, "product_id,product_name,store_id,price_sar,list_price_sar,url,observed_at,availability,vat_included,match,notes\n" +
-        ["apple:3799", "jarir:3849", "extra:3899"].map((x) => {
-          const [st, pr] = x.split(":");
-          return `${pid},iPhone 17 256GB,${st},${pr},,https://example.com/${st}/iphone-17-256gb,${now},in_stock,yes,iPhone 17 / 256GB,اختبار محلي`;
-        }).join("\n") + "\n");
-      const sql = execFileSync("node", [join(ROOT, "scripts/research/ledger-to-sql.mjs"), ledger, "electronics"], { encoding: "utf8" });
-      const imp = await withClient("supa_postgres", MIG_PW, "v_two", async (c) => {
-        try { const res = await c.query(sql); const l = Array.isArray(res) ? res : [res]; return { ok: true, row: l[l.length - 1].rows[0] }; }
-        catch (e) { return { ok: false, error: e.message }; }
-      });
-      ok(imp.ok && imp.row?.status === "committed" && Number(imp.row?.observations) === 3, "مساعد الرصد: الاستيراد عبر مسار الخدمة نجح (3 أسعار)", imp.ok ? "" : imp.error);
-      const pubBefore = (await su("v_two", "select count(*)::int as n from pub.electronics_offers where product_id = $1", [pid])).rows[0].n;
-      ok(pubBefore === 0, "مساعد الرصد: لا يظهر أي سعر في الموقع قبل الاعتماد");
-      const asAdmin = (q, params) => withClient("postgres", SU_PW, "v_two", async (c) => {
-        await c.query("begin");
-        await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: "00000000-0000-4000-8000-00000000c001", role: "authenticated", aal: "aal2" })]);
-        await c.query("set local role authenticated");
-        try { const r = await c.query(q, params); await c.query("commit"); return { ok: true, rows: r.rows }; }
-        catch (e) { await c.query("rollback"); return { ok: false, error: e.message }; }
-      });
-      const ids = (await su("v_two", "select o.id, o.url from tp.price_observations o join tp.offer_streams os on os.id = o.stream_id where os.offer_key like 'research-%' order by o.id")).rows;
-      const noEvidence = await asAdmin("select admin_api.verify_observation($1, 'verified')", [ids[0].id]);
-      ok(!noEvidence.ok && /evidence_url/.test(noEvidence.error), "مساعد الرصد: الاعتماد بلا رابط دليل مرفوض");
-      let allOk = true;
-      for (const o of ids) allOk = (await asAdmin("select admin_api.verify_observation($1, 'verified', null, null, 'فُتح الرابط وطابق', $2)", [o.id, o.url])).ok && allOk;
-      ok(allOk, "مساعد الرصد: المشرف يعتمد (المُدخل خدمة لا مستخدم، فلا مراجعة ذاتية)");
-      const pubAfter = (await su("v_two", "select count(*)::int as n from pub.electronics_offers where product_id = $1", [pid])).rows[0].n;
-      ok(pubAfter === 3, "مساعد الرصد: بعد الاعتماد تظهر الأسعار الثلاثة في الموقع", String(pubAfter));
-      await su("v_two", "update tp.sources set status = 'suspended' where id = 'assisted-research-electronics'");
-      const blocked = await withClient("supa_postgres", MIG_PW, "v_two", async (c) => {
-        try { await c.query(sql.replace(/sha256=[0-9a-f]{64}/, "x").replace(/'[0-9a-f]{64}'/g, `'${"0".repeat(64)}'`)); return false; } catch { return true; }
-      });
-      ok(blocked, "مساعد الرصد: تعليق المصدر يوقف أي استيراد جديد فورًا");
-      await su("v_two", "update tp.sources set status = 'approved' where id = 'assisted-research-electronics'");
-    }
-
     // 4) إعادة التشغيل
     const audit1 = await su("v_two", "select count(*) as n from tp.products");
     r = await runSetup("v_two");
@@ -348,7 +299,6 @@ async function main() {
       }
       await c.query(`select tp.bootstrap_first_admins('00000000-0000-4000-8000-00000000c001', 'first.admin',
                                                      '00000000-0000-4000-8000-00000000c002', 'second.admin')`);
-      await c.query(readFileSync(join(ROOT, "db/schema/004_assisted_research.sql"), "utf8"));
       await c.query(readFileSync(join(ROOT, "db/seed/100_catalog_seed.sql"), "utf8"));
     });
     const fa = (await su("v_two", FINGERPRINT)).rows[0];

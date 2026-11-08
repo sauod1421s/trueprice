@@ -8,6 +8,7 @@
  *   node scripts/mvp/db.mjs reset   # حذف القاعدة المحلية وإعادة الإعداد من البداية
  *   node scripts/mvp/db.mjs env     # طباعة متغيرات البيئة (بدون كلمات المرور)
  *   node scripts/mvp/db.mjs test-db # تشغيل القاعدة + اختبارات قواعد القاعدة (CI)
+ *   node scripts/mvp/db.mjs sql <file>|-c "<sql>"  # (اختبارات) تنفيذ SQL على القاعدة المحلية العاملة بدور الترحيل
  *
  * كل الملفات المولدة (البيانات، كلمات المرور، سر الجلسة) في .local/ وهي مستبعدة من Git.
  */
@@ -116,9 +117,10 @@ async function setup() {
     await migrator.query(`alter role tp_app password '${env.TP_APP_PASSWORD.replace(/'/g, "''")}'`);
 
     await runFile(admin, "db/local/003_local_preview_users.sql", "مستخدمو المعاينة المحليون وتهيئة أول مشرفين");
-    await runFile(migrator, "db/schema/004_assisted_research.sql", "004 مساعد الرصد (مصدر خدمة، الاعتماد بدليل من مشرف)");
 
     await runFile(migrator, "db/seed/100_catalog_seed.sql", "100 نقل الكتالوج والسيارات والأسعار المرجعية (غير موثقة)");
+    // 004 بعد الكتالوج كما في الإنتاج (setup_all.sql ثم 004): مصادره المسودة مرتبطة بمتجري apple و jarir
+    await runFile(migrator, "db/schema/004_assisted_research.sql", "004 مساعد الرصد (دور خدمة مستقل، مصادر مسودة، الاعتماد بدليل)");
     const counts = await migrator.query(`select
         (select count(*) from tp.products where category_kind = 'electronics') as electronics,
         (select count(*) from tp.products where category_kind = 'cars') as cars,
@@ -183,10 +185,27 @@ else if (cmd === "reset") {
   await setup();
 } else if (cmd === "test-db") {
   await runWithDb(["run", "tests/mvp/db-", ...process.argv.slice(3)], "node_modules/vitest/vitest.mjs");
+} else if (cmd === "sql") {
+  // محلي فقط (اختبارات): تنفيذ ملف SQL أو استعلام على القاعدة المحلية العاملة بدور الترحيل غير المدير
+  // node scripts/mvp/db.mjs sql <file.sql>   |   node scripts/mvp/db.mjs sql -c "select ..."
+  const env = loadOrCreateEnv();
+  const sql = process.argv[3] === "-c" ? process.argv[4] : readFileSync(resolve(process.argv[3] ?? ""), "utf8");
+  const c = client(env, "supa_postgres", env.TP_MIGRATOR_PASSWORD);
+  await c.connect();
+  try {
+    const r = await c.query(sql);
+    const last = Array.isArray(r) ? r[r.length - 1] : r;
+    console.log(JSON.stringify(last.rows ?? []));
+  } catch (e) {
+    console.error(`✗ ${e.message}`);
+    process.exitCode = 1;
+  } finally {
+    await c.end();
+  }
 } else if (cmd === "env") {
   const env = loadOrCreateEnv();
   console.log(`TP_DATA_SOURCE=db\nDATABASE_URL=postgres://tp_app:****@127.0.0.1:${env.TP_PG_PORT}/${DB_NAME}\nTP_PREVIEW_AUTH=on`);
 } else {
-  console.log("الاستخدام: node scripts/mvp/db.mjs setup|dev|start|build|reset|test-db|env");
+  console.log("الاستخدام: node scripts/mvp/db.mjs setup|dev|start|build|reset|test-db|sql|env");
   process.exit(1);
 }

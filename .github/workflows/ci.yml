@@ -22,6 +22,8 @@ jobs:
       - run: npm run data:seed:check
       # ملف الإعداد الموحد db/supabase/setup_all.sql يطابق ملفات المصدر حرفيًا
       - run: npm run db:setup-all:check
+      # ترحيل 004 وملف تراجعه يطابقان المولِّد (الدوال منسوخة حرفيًا من 001 بأسطر محددة فقط)
+      - run: npm run db:004:check
       # الاختبارات مع حد أدنى للتغطية (يفشل تحته)
       - run: npm run coverage
       - run: npm run build
@@ -42,6 +44,11 @@ jobs:
       - run: npm run mvp:test-db
       # ملف الإعداد الموحد كما يُلصق في SQL Editor: بدور غير مدير، بلا/مع مستخدمين، إعادة التشغيل، مطابقة البنية
       - run: npm run db:setup-all:verify
+      # 004 على نسخة مطابقة للإنتاج: التطبيق، إعادة التشغيل، فصل المهام، محاولات غير مصرح بها، التراجع
+      # البصمة بنية فقط (أسماء وأنواع وقيود ونصوص دوال مُجزّأة) — ليست سرًا
+      - run: npm run db:004:verify
+        env:
+          TP_PROD_FINGERPRINT: 2c02b9e2b87b940e5a6ab5f12365a42d
 
   audit:
     # فحص ثغرات حزم الإنتاج — يفشل عند وجود ثغرة عالية أو حرجة

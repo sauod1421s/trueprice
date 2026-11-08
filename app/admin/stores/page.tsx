@@ -1,6 +1,6 @@
 import { Badge } from "../../components/ui";
 import { listStoresAndSources } from "../../lib/admin/db";
-import { addSource, addStore, changeSourceStatus } from "../actions";
+import { addSource, addStore, approveResearch, changeSourceStatus } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
 
 type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
@@ -11,6 +11,7 @@ const KIND_LABEL: Record<string, string> = {
   legacy_manual: "بيانات الموقع الحالية",
   affiliate_feed: "شبكة تسويق",
   official_api: "واجهة رسمية",
+  assisted_research: "مساعد الرصد (إدخال يدوي بدليل)",
 };
 
 const SOURCE_STATUS: Record<string, string> = { draft: "مسودة", suspended: "موقوف", retired: "متقاعد" };
@@ -110,7 +111,27 @@ export default async function StoresPage({ searchParams }: Props) {
                   {s.storeId ? ` · ${s.storeId}` : ""}
                 </div>
                 {s.permissionBasis && <div className="mt-0.5 text-xs text-ink-3">الإذن: {s.permissionBasis}</div>}
-                {can(ctx, "source:manage") && s.kind !== "legacy_manual" && (s.status === "approved" || s.status === "suspended") && (
+                {s.termsUrl && (
+                  <div className="mt-0.5 text-xs text-ink-3">
+                    الشروط المراجَعة:{" "}
+                    <a href={s.termsUrl} target="_blank" rel="noopener noreferrer" className="underline" dir="ltr">{s.termsUrl}</a>
+                    {s.termsReviewedAt ? ` · ${new Date(s.termsReviewedAt).toLocaleDateString("ar-SA-u-nu-latn")}` : ""}
+                  </div>
+                )}
+                {can(ctx, "source:manage") && s.kind === "assisted_research" && (s.status === "draft" || s.status === "suspended") && (
+                  <form action={approveResearch} className="mt-2 space-y-2 rounded-xl border border-line p-3" data-research-approve={s.id}>
+                    <input type="hidden" name="sourceId" value={s.id} />
+                    <Field label="رابط صفحة شروط الاستخدام في موقع المتجر" hint="راجع الشروط بنفسك أولًا: هل تسمح بنقل الأسعار المعروضة علنًا مع رابط المصدر؟">
+                      <input name="termsUrl" type="url" required pattern="https://.+" className={inputCls} dir="ltr" placeholder="https://" />
+                    </Field>
+                    <label className="flex items-start gap-2 text-xs">
+                      <input type="checkbox" name="attest" value="yes" required className="mt-0.5" />
+                      <span>راجعت شروط الموقع وأقر بأنها لا تمنع نقل السعر المعروض علنًا مع رابطه. اعتماد المصدر لا ينشر أي سعر؛ كل سعر يحتاج توثيقًا منفصلًا.</span>
+                    </label>
+                    <SubmitButton>اعتماد المصدر بعد مراجعة الشروط</SubmitButton>
+                  </form>
+                )}
+                {can(ctx, "source:manage") && s.kind !== "legacy_manual" && (s.status === "approved" || (s.status === "suspended" && s.kind !== "assisted_research")) && (
                   <form action={changeSourceStatus} className="mt-1">
                     <input type="hidden" name="sourceId" value={s.id} />
                     <input type="hidden" name="status" value={s.status === "approved" ? "suspended" : "approved"} />

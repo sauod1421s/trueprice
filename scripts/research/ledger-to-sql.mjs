@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * يحوّل سجل رصد الأسعار (CSV في data/research/) إلى كتلة SQL واحدة تستورده عبر مسار الخدمة
- * لمصدر «مساعد الرصد» (assisted-research-<vertical>) — نفس دوال الاستيراد الرسمية:
- * register → stage → seal → commit. الأسعار تدخل «غير موثقة» ولا تظهر حتى يعتمدها مشرف.
+ * يحوّل سجل رصد الأسعار (CSV في data/research/) إلى معاملة SQL واحدة تُنفَّذ بدور الخدمة tp_research
+ * عبر research_api (ترحيل 004): عملية استيراد لكل متجر في مصدره research-<store>، بنفس دوال الاستيراد الرسمية
+ * register → stage → seal → commit. الأسعار تدخل «غير موثقة» ولا تظهر حتى يعتمدها مشرف بعد فتح الرابط.
+ * المصدر يجب أن يكون معتمدًا من المشرف بعد مراجعة شروط الموقع، وإلا ترفض القاعدة الإدخال.
  *
  * أعمدة السجل (رأس إلزامي):
  *   product_id,product_name,store_id,price_sar,list_price_sar,url,observed_at,availability,vat_included,match,notes
  * - product_id: المعرّف الداخلي في القاعدة. product_name: نسخة للتحقق البشري فقط.
  * - url: رابط صفحة المنتج نفسها (https) — لا صفحات بحث ولا مواقع مقارنة.
  * - observed_at: وقت الرصد ISO مع المنطقة (+03:00). vat_included: yes (أسعار التجزئة السعودية شاملة الضريبة).
+ * - availability: in_stock فقط إن ظهر زر شراء/إضافة للسلة فعّال؛ وإلا unknown (يُسجَّل ولا يُنشر).
  * - match: ما تمت مطابقته (الموديل/السعة/الذاكرة/الفئة/السنة). notes: ملاحظات.
  *
  * الاستخدام: node scripts/research/ledger-to-sql.mjs data/research/<file>.csv electronics|cars > /tmp/import.sql
@@ -96,21 +98,32 @@ const rows = body.map((cells, idx) => {
 if (errors.length) { console.error(errors.join("\n")); process.exit(1); }
 if (!rows.length) { console.error("no rows"); process.exit(1); }
 
-const json = JSON.stringify(rows);
-if (json.includes("$tp_rows$")) { console.error("delimiter collision"); process.exit(1); }
 const name = basename(file);
-process.stdout.write(`-- ${name} sha256=${sha} rows=${rows.length} (مساعد الرصد → غير موثقة حتى يعتمدها مشرف)
+const byStore = new Map();
+for (const r of rows) byStore.set(r.store_id, [...(byStore.get(r.store_id) ?? []), r]);
+const blocks = [...byStore.entries()].map(([store, list]) => {
+  const json = JSON.stringify(list);
+  if (json.includes("$tp_rows$")) { console.error("delimiter collision"); process.exit(1); }
+  const fileName = `${name}#${store}`;
+  const fileSha = createHash("sha256").update(`${sha}:${store}:${json}`).digest("hex");
+  return `-- ${store}: ${list.length} rows → research-${store}
 do $tp_import$
 declare v_run uuid; v_sha text; v_res jsonb;
 begin
-  v_run := tp.register_import_core(null, 'service', 'assisted-research-${vertical}', 'imports/research/${sha}', '${name}',
-    ${Buffer.byteLength(raw)}, '${sha}', 'research-ledger-1', 'csv', '{"max_rows":1000}'::jsonb,
-    '{"accepted":${rows.length},"rejected":0}'::jsonb, '[]'::jsonb, '[]'::jsonb);
-  perform tp.stage_rows_core(null, 'service', v_run, 1, $tp_rows$${json}$tp_rows$::jsonb);
-  v_sha := tp.seal_import_core(null, 'service', v_run, ${rows.length});
-  v_res := tp.commit_import_core(v_run, v_sha, null, 'service');
-  raise notice 'run % committed: %', v_run, v_res;
-end $tp_import$;
-select r.id as run_id, r.status, r.totals, (select count(*) from tp.price_observations o where o.import_run_id = r.id) as observations
-from tp.import_runs r join tp.import_files f on f.id = r.file_id where f.sha256 = '${sha}';
+  v_run := research_api.register_import('research-${store}', '${fileName}', ${Buffer.byteLength(json)}, '${fileSha}', ${list.length});
+  perform research_api.stage_rows(v_run, 1, $tp_rows$${json}$tp_rows$::jsonb);
+  v_sha := research_api.seal_import(v_run, ${list.length});
+  v_res := research_api.commit_import(v_run, v_sha);
+  raise notice 'research-${store}: run % committed %', v_run, v_res;
+end $tp_import$;`;
+});
+process.stdout.write(`-- ${name} sha256=${sha} rows=${rows.length} stores=${byStore.size}
+-- يُنفَّذ بدور الخدمة tp_research (لا يقرأ ولا يعدّل أي جدول ولا يعتمد): الأسعار تدخل غير موثقة حتى يعتمدها مشرف.
+begin;
+set local role tp_research;
+${blocks.join("\n")}
+commit;
+select r.source_id, r.status, (select count(*) from tp.price_observations o where o.import_run_id = r.id) as observations
+from tp.import_runs r join tp.import_files f on f.id = r.file_id
+where f.file_name like '${name}#%' order by r.source_id;
 `);

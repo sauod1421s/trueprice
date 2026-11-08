@@ -176,6 +176,7 @@ export type AdminStore = { id: string; name: string; nameAr: string; status: str
 export type AdminSource = {
   id: string; name: string; kind: string; storeId: string | null; status: string;
   permissionBasis: string | null; approvedAt: string | null;
+  termsUrl: string | null; termsReviewedAt: string | null;
 };
 
 export async function listStoresAndSources(claims: DbClaims) {
@@ -185,10 +186,10 @@ export async function listStoresAndSources(claims: DbClaims) {
     );
     const sources = await c.query<{
       id: string; name: string; kind: string; store_id: string | null; status: string;
-      permission_basis: string | null; approved_at: Date | null;
+      permission_basis: string | null; approved_at: Date | null; permission_evidence_url: string | null; terms_reviewed_at: Date | null;
     }>(
-      `select id, name, kind, store_id, status, permission_basis, approved_at
-       from admin_api.sources where vertical = 'electronics' order by created_at desc, id`
+      `select id, name, kind, store_id, status, permission_basis, approved_at, permission_evidence_url, terms_reviewed_at
+       from admin_api.sources order by (kind::text = 'assisted_research') desc, created_at desc, id`
     );
     return {
       stores: stores.rows.map<AdminStore>((s) => ({
@@ -197,6 +198,7 @@ export async function listStoresAndSources(claims: DbClaims) {
       sources: sources.rows.map<AdminSource>((s) => ({
         id: s.id, name: s.name, kind: s.kind, storeId: s.store_id, status: s.status,
         permissionBasis: s.permission_basis, approvedAt: s.approved_at?.toISOString() ?? null,
+        termsUrl: s.permission_evidence_url, termsReviewedAt: s.terms_reviewed_at?.toISOString() ?? null,
       })),
     };
   });
@@ -456,12 +458,32 @@ export async function setProductStatus(claims: DbClaims, productId: number, stat
 }
 
 /** إيقاف مصدر مؤقتًا أو إعادة اعتماده — المصدر الموقوف لا يقبل أي استيراد جديد */
+/*
+ * ملاحظة: المقارنة بـ kind::text (لا بقيمة enum مباشرة) حتى تعمل الاستعلامات قبل تطبيق 004 أيضًا،
+ * فقيمة 'assisted_research' لا توجد في النوع قبله ومقارنتها مباشرة ترمي خطأ.
+ */
+
+/**
+ * اعتماد مصدر «مساعد الرصد» من حالة المسودة بعد مراجعة شروط الموقع: يُحفظ رابط الشروط ووقت المراجعة،
+ * ويُسجَّل المعتمِد تلقائيًا (stamp_source_approval) وتُدقَّق العملية (audit_row_change).
+ */
+export async function approveResearchSource(claims: DbClaims, sourceId: string, termsUrl: string): Promise<void> {
+  await withClaims(claims, async (c) => {
+    const r = await c.query(
+      `update tp.sources set status = 'approved', permission_evidence_url = $2, terms_reviewed_at = now()
+       where id = $1 and status in ('draft', 'suspended') and kind::text = 'assisted_research'`,
+      [sourceId, termsUrl]
+    );
+    if (r.rowCount !== 1) throw new Error("المصدر غير موجود أو ليس مصدر مساعد رصد بحالة مسودة/موقوف");
+  });
+}
+
 export async function setSourceStatus(claims: DbClaims, sourceId: string, status: "approved" | "suspended"): Promise<void> {
   await withClaims(claims, async (c) => {
     const r = await c.query(
       status === "approved"
         ? `update tp.sources set status = 'approved', approved_by = $2, approved_at = now()
-           where id = $1 and status = 'suspended' and kind <> 'legacy_manual'`
+           where id = $1 and status = 'suspended' and kind::text not in ('legacy_manual', 'assisted_research')`
         : `update tp.sources set status = 'suspended' where id = $1 and status = 'approved' and kind <> 'legacy_manual'`,
       status === "approved" ? [sourceId, claims.sub] : [sourceId]
     );
@@ -605,7 +627,7 @@ export async function reviewQueue(
       store_id: string; store_ar: string; amount: string; currency: string; as_of: Date; source_id: string;
       verification: string; exclusion_reasons: string[]; last_event: string | null; prev_amount: string | null;
       imported_by: string | null; is_demo: boolean | null; url: string | null; category_kind: string;
-      evidence: Record<string, unknown> | null;
+      evidence: Record<string, unknown> | null; source_kind: string | null;
     }>(
       `select e.observation_id, coalesce(p.name_ar, p.name) as product, e.product_id, p.legacy_id,
               e.effective_store_id as store_id, st.name_ar as store_ar, e.amount, e.currency, e.as_of, e.source_id,
@@ -619,6 +641,7 @@ export async function reviewQueue(
                  left join tp.profiles pr on pr.user_id = ir.started_by
                where o.id = e.observation_id) as imported_by,
               d.is_demo, e.category_kind::text as category_kind,
+              (select s.kind::text from admin_api.sources s where s.id = e.source_id) as source_kind,
               (select o.url from admin_api.price_observations o where o.id = e.observation_id) as url,
               (select sr.payload -> 'evidence' from admin_api.price_observations o
                  join admin_api.import_staged_rows sr on sr.run_id = o.import_run_id
@@ -648,7 +671,7 @@ export async function reviewQueue(
       reasons: x.exclusion_reasons,
       lastEventId: x.last_event === null ? null : Number(x.last_event),
       previousAmount: x.prev_amount === null ? null : Number(x.prev_amount),
-      importedBy: x.imported_by ?? (x.source_id.startsWith("assisted-research-") ? "مساعد الرصد" : null),
+      importedBy: x.imported_by ?? (x.source_kind === "assisted_research" ? "مساعد الرصد" : null),
       isDemo: x.is_demo === true,
       url: x.url,
       kind: x.category_kind === "cars" ? "cars" : "electronics",
