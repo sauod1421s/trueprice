@@ -8,6 +8,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createEnroller, type MfaApi } from "../../lib/auth/mfaEnroll";
 
 type Step = "password" | "mfa";
 type Enroll = { factorId: string; qr: string; secret: string } | null;
@@ -29,13 +30,15 @@ export default function SupabaseLogin({ url, publishableKey, initialStep }: { ur
   const [enroll, setEnroll] = useState<Enroll>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
 
   async function afterPassword() {
     const { data, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
     if (error) throw error;
     if (data.currentLevel === "aal2") return router.refresh();
+    // التسجيل (إن لزم) يتم مرة واحدة فقط من التأثير أدناه، لا هنا — كان الاستدعاء المزدوج
+    // يرسل طلبي تسجيل متزامنين فيُرفض الثاني (اسم مكرر) وتظهر رسالة الخطأ
     setStep("mfa");
-    if (data.nextLevel !== "aal2") await startEnroll();
   }
 
   // فتح الصفحة بجلسة بلا تحقق ثنائي (مثل إعادة التحميل أثناء التسجيل): إن لم يوجد عامل مُفعّل
@@ -55,15 +58,12 @@ export default function SupabaseLogin({ url, publishableKey, initialStep }: { ur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // طلب تسجيل واحد في كل مرة (انظر app/lib/auth/mfaEnroll.ts)
+  const enroller = useMemo(() => createEnroller(sb.auth.mfa as unknown as MfaApi), [sb]);
   async function startEnroll() {
-    // تنظيف عوامل غير مكتملة من محاولات سابقة ثم إنشاء عامل TOTP جديد
-    const factors = await sb.auth.mfa.listFactors();
-    for (const f of factors.data?.all ?? []) {
-      if (f.factor_type === "totp" && f.status !== "verified") await sb.auth.mfa.unenroll({ factorId: f.id });
-    }
-    const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "TruePrice admin" });
-    if (error) throw error;
-    setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
+    const e = await enroller();
+    setShowSecret(false);
+    setEnroll(e);
   }
 
   async function onPassword(form: FormData) {
@@ -138,9 +138,16 @@ export default function SupabaseLogin({ url, publishableKey, initialStep }: { ur
               <p className="font-medium">التحقق الثنائي إلزامي للوحة الإدارة. امسح الرمز بتطبيق المصادقة (مثل Google Authenticator أو Microsoft Authenticator):</p>
               {/* eslint-disable-next-line @next/next/no-img-element -- رمز QR بصيغة data URI من Supabase */}
               <img src={enroll.qr} alt="رمز QR لتطبيق المصادقة" className="mx-auto size-48 rounded-xl border border-line bg-white p-2" />
-              <p className="text-ink-3">
-                أو أدخل المفتاح يدويًا: <code dir="ltr" className="break-all">{enroll.secret}</code>
-              </p>
+              {/* المفتاح النصي مخفي افتراضيًا لتقليل كشفه في لقطات الشاشة */}
+              {showSecret ? (
+                <p className="text-ink-3">
+                  المفتاح اليدوي (لا تشاركه ولا تصوّره): <code dir="ltr" className="break-all">{enroll.secret}</code>
+                </p>
+              ) : (
+                <button type="button" onClick={() => setShowSecret(true)} className="text-xs text-ink-3 underline">
+                  لا أستطيع مسح الرمز — أظهر المفتاح اليدوي
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-sm leading-7">أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة.</p>
