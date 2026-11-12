@@ -1,5 +1,5 @@
 import { Badge } from "../../components/ui";
-import { listStoresAndSources } from "../../lib/admin/db";
+import { affiliateNetworks, listStoresAndSources } from "../../lib/admin/db";
 import { SUGGESTED_TERMS } from "../../lib/admin/researchTerms";
 import { addSource, addStore, approveResearch, changeSourceStatus } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
@@ -20,7 +20,7 @@ const SOURCE_STATUS: Record<string, string> = { draft: "مسودة", suspended: 
 export default async function StoresPage({ searchParams }: Props) {
   const { ok, err } = await searchParams;
   const ctx = await requireAdmin();
-  const { stores, sources } = await listStoresAndSources(ctx.claims);
+  const [{ stores, sources }, networks] = await Promise.all([listStoresAndSources(ctx.claims), affiliateNetworks(ctx.claims)]);
   const pendingResearch = sources.filter((s) => s.kind === "assisted_research" && (s.status === "draft" || s.status === "suspended"));
 
   return (
@@ -99,13 +99,23 @@ export default async function StoresPage({ searchParams }: Props) {
                 <Field label="المعرّف"><input name="id" required pattern="[a-z0-9][a-z0-9\-]{1,62}" className={inputCls} dir="ltr" /></Field>
                 <Field label="الاسم"><input name="name" required className={inputCls} /></Field>
               </div>
-              <Field label="النوع" hint="الاستيراد الآلي والشبكات معطّلة مؤقتًا في MVP">
+              <Field label="النوع" hint="السعر يُنسب دائمًا للمتجر لا للشبكة: نون عبر ArabClicks يُحسب «نون»">
                 <select name="kind" className={inputCls}>
                   <option value="manual_upload">رفع يدوي بدليل (لقطة/صفحة المتجر)</option>
                   <option value="store_feed">ملف متجر واحد</option>
+                  <option value="affiliate_feed">ملف من شبكة عمولة (ArabClicks / Admitad)</option>
+                  <option value="official_api">واجهة رسمية (Amazon Creators API)</option>
                 </select>
               </Field>
-              <Field label="المتجر (لملف متجر واحد فقط)">
+              <Field label="شبكة العمولة (لملف شبكة عمولة فقط)">
+                <select name="networkId" className={inputCls} defaultValue="">
+                  <option value="">—</option>
+                  {networks.map((n) => (
+                    <option key={n.id} value={n.id}>{n.name} ({n.id})</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="المتجر (إلزامي لكل مصدر غير الرفع اليدوي)">
                 <select name="storeId" className={inputCls} defaultValue="">
                   <option value="">—</option>
                   {stores.filter((s) => s.status === "active").map((s) => (
@@ -117,6 +127,9 @@ export default async function StoresPage({ searchParams }: Props) {
                 <input name="permissionBasis" required className={inputCls} />
               </Field>
               <Field label="رابط الدليل (اختياري)"><input name="evidenceUrl" type="url" className={inputCls} dir="ltr" placeholder="https://" /></Field>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="allowAutomated" /> السماح بالجلب الآلي (فقط إذا أذن المصدر بالوصول البرمجي كتابةً)
+              </label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="approve" defaultChecked /> اعتماد المصدر الآن</label>
               <SubmitButton>إضافة المصدر</SubmitButton>
             </form>

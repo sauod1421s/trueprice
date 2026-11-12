@@ -129,7 +129,7 @@ export type NormalizedOffer = {
   feedGeneratedAt: ParsedTimestamp | null;
 };
 
-export type MatchMethod = "gtin" | "model" | "name";
+export type MatchMethod = "store_sku" | "gtin" | "model" | "name";
 
 export type MatchCandidate = {
   productId: number;

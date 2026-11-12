@@ -220,21 +220,60 @@ export async function createStore(
 export async function createSource(
   claims: DbClaims,
   input: {
-    id: string; name: string; kind: "manual_upload" | "store_feed"; storeId?: string;
+    id: string; name: string; kind: "manual_upload" | "store_feed" | "affiliate_feed" | "official_api"; storeId?: string;
+    networkId?: string; allowAutomated?: boolean;
     permissionBasis: string; evidenceUrl?: string; approve: boolean;
   }
 ) {
+  // المتجر إلزامي لكل مصدر آلي (السعر يُنسب للمتجر، لا للشبكة: نون عبر ArabClicks = نون)
+  const needsStore = input.kind !== "manual_upload";
+  if (needsStore && !input.storeId) throw new Error("حدد المتجر الذي تعود له أسعار هذا المصدر");
+  if (input.kind === "affiliate_feed" && !input.networkId) throw new Error("حدد شبكة العمولة");
   return withClaims(claims, async (c) => {
     await c.query(
-      `insert into tp.sources (id, name, kind, vertical, store_id, default_currency, time_zone, status,
-                               permission_basis, permission_evidence_url, approved_by, approved_at)
-       values ($1, $2, $3, 'electronics', $4, 'SAR', 'Asia/Riyadh', $5, $6, $7, $8, $9)`,
+      `insert into tp.sources (id, name, kind, vertical, store_id, network_id, allow_automated, default_currency, time_zone,
+                               status, permission_basis, permission_evidence_url, approved_by, approved_at)
+       values ($1, $2, $3, 'electronics', $4, $5, $6, 'SAR', 'Asia/Riyadh', $7, $8, $9, $10, $11)`,
       [
-        input.id, input.name, input.kind, input.kind === "store_feed" ? input.storeId || null : null,
+        input.id, input.name, input.kind, needsStore ? input.storeId : null,
+        input.kind === "affiliate_feed" ? input.networkId : null,
+        input.kind !== "manual_upload" && !!input.allowAutomated,
         input.approve ? "approved" : "draft", input.permissionBasis, input.evidenceUrl || null,
         input.approve ? claims.sub : null, input.approve ? new Date() : null,
       ]
     );
+  });
+}
+
+export type ConnectorSourceRow = {
+  id: string; name: string; kind: string; storeId: string | null; networkId: string | null;
+  status: string; allowAutomated: boolean;
+};
+
+/** المصادر القابلة للجلب الآلي (ملف شبكة عمولة / ملف متجر / واجهة رسمية) — للعرض في لوحة الإدارة */
+export async function connectorSources(claims: DbClaims): Promise<ConnectorSourceRow[]> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{
+      id: string; name: string; kind: string; store_id: string | null; network_id: string | null;
+      status: string; allow_automated: boolean;
+    }>(
+      `select id, name, kind::text, store_id, network_id, status::text, allow_automated from admin_api.sources
+       where vertical = 'electronics' and kind in ('store_feed', 'affiliate_feed', 'official_api') order by id`
+    );
+    return r.rows.map((x) => ({
+      id: x.id, name: x.name, kind: x.kind, storeId: x.store_id, networkId: x.network_id,
+      status: x.status, allowAutomated: x.allow_automated,
+    }));
+  });
+}
+
+/** شبكات العمولة المسجّلة (لاختيارها عند إضافة مصدر) */
+export async function affiliateNetworks(claims: DbClaims): Promise<{ id: string; name: string; status: string }[]> {
+  return withClaims(claims, async (c) => {
+    const r = await c.query<{ id: string; name: string; status: string }>(
+      `select id, name, status::text from admin_api.affiliate_networks order by id`
+    );
+    return r.rows;
   });
 }
 
@@ -326,6 +365,7 @@ async function registerStageSeal(
 export type FeedSource = {
   id: string; name: string; kind: string; storeId: string | null;
   defaultCurrency: string | null; timeZone: string | null; columnMap: Record<string, string>;
+  networkId?: string | null; allowAutomated?: boolean;
 };
 
 /**
@@ -336,10 +376,12 @@ export async function feedContext(claims: DbClaims, sourceId: string) {
   return withClaims(claims, async (c) => {
     const src = await c.query<{
       id: string; name: string; kind: string; store_id: string | null; default_currency: string | null;
-      time_zone: string | null; column_map: Record<string, string>;
+      time_zone: string | null; column_map: Record<string, string>; network_id: string | null; allow_automated: boolean;
     }>(
-      `select id, name, kind, store_id, default_currency, time_zone, column_map from admin_api.sources
-       where id = $1 and status = 'approved' and vertical = 'electronics' and kind in ('manual_upload', 'store_feed')`,
+      `select id, name, kind, store_id, default_currency, time_zone, column_map, network_id, allow_automated
+       from admin_api.sources
+       where id = $1 and status = 'approved' and vertical = 'electronics'
+         and kind in ('manual_upload', 'store_feed', 'affiliate_feed', 'official_api')`,
       [sourceId]
     );
     const products = await c.query<{ id: string; name: string; name_ar: string | null; brand: string }>(
@@ -347,8 +389,8 @@ export async function feedContext(claims: DbClaims, sourceId: string) {
        join admin_api.brands b on b.id = p.brand_id
        where p.category_kind = 'electronics' and p.status = 'active'`
     );
-    const idents = await c.query<{ product_id: string; kind: string; value: string }>(
-      `select product_id, kind::text, value from admin_api.product_identifiers where kind in ('gtin', 'mpn')`
+    const idents = await c.query<{ product_id: string; kind: string; value: string; store_id: string | null }>(
+      `select product_id, kind::text, value, store_id from admin_api.product_identifiers where kind in ('gtin', 'mpn', 'store_sku')`
     );
     const stores = await c.query<{ id: string; name: string; name_ar: string; is_marketplace: boolean }>(
       `select id, name, name_ar, is_marketplace from admin_api.stores where status = 'active' and merged_into is null`
@@ -356,10 +398,12 @@ export async function feedContext(claims: DbClaims, sourceId: string) {
     const domains = await c.query<{ domain: string; store_id: string }>(`select domain, store_id from admin_api.store_domains`);
     const aliases = await c.query<{ normalized: string; store_id: string }>(`select normalized, store_id from admin_api.store_aliases`);
 
-    const byProduct = new Map<string, { gtins: string[]; mpns: string[] }>();
+    const byProduct = new Map<string, { gtins: string[]; mpns: string[]; skus: { storeId: string; value: string }[] }>();
     for (const i of idents.rows) {
-      const e = byProduct.get(i.product_id) ?? { gtins: [], mpns: [] };
-      (i.kind === "gtin" ? e.gtins : e.mpns).push(i.value);
+      const e = byProduct.get(i.product_id) ?? { gtins: [], mpns: [], skus: [] };
+      if (i.kind === "gtin") e.gtins.push(i.value);
+      else if (i.kind === "mpn") e.mpns.push(i.value);
+      else if (i.store_id) e.skus.push({ storeId: i.store_id, value: i.value });
       byProduct.set(i.product_id, e);
     }
     const catalog: CatalogEntry[] = products.rows.map((p) => ({
@@ -369,6 +413,7 @@ export async function feedContext(claims: DbClaims, sourceId: string) {
       names: [p.name, p.name_ar ?? "", `${p.brand} ${p.name}`].filter(Boolean),
       gtins: byProduct.get(p.id)?.gtins ?? [],
       mpns: byProduct.get(p.id)?.mpns ?? [],
+      skus: byProduct.get(p.id)?.skus ?? [],
     }));
     const registry: StoreRecord[] = stores.rows.map((s) => ({
       id: s.id,
@@ -382,8 +427,13 @@ export async function feedContext(claims: DbClaims, sourceId: string) {
     return {
       source: s
         ? ({ id: s.id, name: s.name, kind: s.kind, storeId: s.store_id, defaultCurrency: s.default_currency,
-             timeZone: s.time_zone, columnMap: s.column_map ?? {} } satisfies FeedSource)
+             timeZone: s.time_zone, columnMap: s.column_map ?? {}, networkId: s.network_id,
+             allowAutomated: s.allow_automated } satisfies FeedSource)
         : null,
+      /** رموز المنتجات النشطة لدى متجر هذا المصدر (مثل ASIN) — لموصّل أمازون */
+      storeSkus: s?.store_id
+        ? idents.rows.filter((i) => i.kind === "store_sku" && i.store_id === s.store_id).map((i) => i.value)
+        : [],
       catalog,
       registry,
       approvedAliases: Object.fromEntries(aliases.rows.map((a) => [a.normalized, a.store_id])) as ApprovedAliases,
@@ -410,21 +460,23 @@ export async function stageFeed(
 
 /* ------------------------------------------------------------------ تعديل الكتالوج والمصادر */
 
-export type ProductIdentifier = { id: number; productId: number; kind: string; value: string };
+export type ProductIdentifier = { id: number; productId: number; kind: string; value: string; storeId: string | null };
 
 export async function listIdentifiers(claims: DbClaims): Promise<ProductIdentifier[]> {
   return withClaims(claims, async (c) => {
-    const r = await c.query<{ id: string; product_id: string; kind: string; value: string }>(
-      `select id, product_id, kind::text, value from admin_api.product_identifiers order by id desc limit 500`
+    const r = await c.query<{ id: string; product_id: string; kind: string; value: string; store_id: string | null }>(
+      `select id, product_id, kind::text, value, store_id from admin_api.product_identifiers order by id desc limit 500`
     );
-    return r.rows.map((x) => ({ id: Number(x.id), productId: Number(x.product_id), kind: x.kind, value: x.value }));
+    return r.rows.map((x) => ({
+      id: Number(x.id), productId: Number(x.product_id), kind: x.kind, value: x.value, storeId: x.store_id,
+    }));
   });
 }
 
-/** يضيف باركود GTIN-14 أو رقم موديل (موحّدين مسبقًا) لمنتج إلكترونيات */
+/** يضيف باركود GTIN-14 أو رقم موديل أو رمز متجر (ASIN/SKU) — موحّدة مسبقًا — لمنتج إلكترونيات */
 export async function addIdentifier(
   claims: DbClaims,
-  input: { productId: number; kind: "gtin" | "mpn"; value: string }
+  input: { productId: number; kind: "gtin" | "mpn" | "store_sku"; value: string; storeId?: string }
 ): Promise<void> {
   await withClaims(claims, async (c) => {
     const p = await c.query<{ brand_id: string }>(
@@ -433,15 +485,16 @@ export async function addIdentifier(
     );
     if (!p.rows[0]) throw new Error("المنتج غير موجود");
     await c.query(
-      `insert into tp.product_identifiers (product_id, kind, value, brand_id, added_by) values ($1, $2, $3, $4, $5)`,
-      [input.productId, input.kind, input.value, input.kind === "mpn" ? p.rows[0].brand_id : null, claims.sub]
+      `insert into tp.product_identifiers (product_id, kind, value, brand_id, store_id, added_by) values ($1, $2, $3, $4, $5, $6)`,
+      [input.productId, input.kind, input.value, input.kind === "mpn" ? p.rows[0].brand_id : null,
+       input.kind === "store_sku" ? input.storeId ?? null : null, claims.sub]
     );
   });
 }
 
 export async function removeIdentifier(claims: DbClaims, id: number): Promise<void> {
   await withClaims(claims, async (c) => {
-    const r = await c.query(`delete from tp.product_identifiers where id = $1 and kind in ('gtin', 'mpn')`, [id]);
+    const r = await c.query(`delete from tp.product_identifiers where id = $1 and kind in ('gtin', 'mpn', 'store_sku')`, [id]);
     if (r.rowCount !== 1) throw new Error("المعرّف غير موجود");
   });
 }

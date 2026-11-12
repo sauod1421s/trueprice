@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge } from "../../components/ui";
-import { catalogOptions, listIdentifiers, listProducts } from "../../lib/admin/db";
+import { catalogOptions, importLookups, listIdentifiers, listProducts } from "../../lib/admin/db";
 import { addProduct, addProductIdentifier, changeProductStatus, deleteProductIdentifier } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
 
@@ -9,9 +9,10 @@ type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
 export default async function CatalogPage({ searchParams }: Props) {
   const { ok, err } = await searchParams;
   const ctx = await requireAdmin();
-  const [options, products, identifiers] = await Promise.all([
-    catalogOptions(ctx.claims), listProducts(ctx.claims), listIdentifiers(ctx.claims),
+  const [options, products, identifiers, lookups] = await Promise.all([
+    catalogOptions(ctx.claims), listProducts(ctx.claims), listIdentifiers(ctx.claims), importLookups(ctx.claims),
   ]);
+  const stores = lookups.stores;
   const canEdit = can(ctx, "catalog:edit");
   const idsByProduct = new Map<number, typeof identifiers>();
   for (const i of identifiers) idsByProduct.set(i.productId, [...(idsByProduct.get(i.productId) ?? []), i]);
@@ -81,10 +82,17 @@ export default async function CatalogPage({ searchParams }: Props) {
                     <select name="kind" className={inputCls}>
                       <option value="gtin">باركود</option>
                       <option value="mpn">رقم موديل</option>
+                      <option value="store_sku">رمز متجر (ASIN/SKU)</option>
                     </select>
                   </Field>
                   <Field label="القيمة"><input name="value" required className={inputCls} dir="ltr" placeholder="0194253401234" /></Field>
                 </div>
+                <Field label="المتجر (لرمز المتجر فقط)" hint="رمز ASIN من رابط المنتج في amazon.sa (بعد /dp/)، أو رمز المنتج لدى نون/جرير">
+                  <select name="storeId" className={inputCls} defaultValue="">
+                    <option value="">—</option>
+                    {stores.map((st) => <option key={st.id} value={st.id}>{st.id}</option>)}
+                  </select>
+                </Field>
                 <SubmitButton>إضافة المعرّف</SubmitButton>
               </form>
             </div>
@@ -121,7 +129,7 @@ export default async function CatalogPage({ searchParams }: Props) {
                       <div className="flex flex-wrap gap-1">
                         {(idsByProduct.get(p.id) ?? []).map((i) => (
                           <form key={i.id} action={deleteProductIdentifier} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-0.5 text-xs" dir="ltr">
-                            <span title={i.kind === "gtin" ? "باركود" : "رقم موديل"}>{i.value}</span>
+                            <span title={i.kind === "gtin" ? "باركود" : i.kind === "mpn" ? "رقم موديل" : `رمز ${i.storeId}`}>{i.kind === "store_sku" ? `${i.storeId}:` : ""}{i.value}</span>
                             {canEdit && (
                               <>
                                 <input type="hidden" name="id" value={i.id} />

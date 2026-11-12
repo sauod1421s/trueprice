@@ -2,6 +2,8 @@
  * مطابقة عروض الملفات مع منتجات الكتالوج.
  *
  * الأولوية:
+ * 0. رمز المنتج لدى المتجر نفسه (ASIN في أمازون، SKU في نون/جرير) — مطابقة مؤكدة
+ *    إذا سجّله المشرف لمنتج واحد ولنفس المتجر.
  * 1. الباركود (GTIN) — مطابقة مؤكدة إذا كان لمنتج واحد ولا يتعارض مع الشركة.
  * 2. رقم الموديل + الشركة المصنعة — مطابقة مؤكدة إذا كانت فريدة.
  * 3. الاسم والمواصفات — لا تُعتمد تلقائيًا أبدًا؛ تذهب لقائمة المراجعة
@@ -25,6 +27,8 @@ export type CatalogEntry = {
   gtins: string[];
   /** أرقام موديل معروفة (موحّدة) */
   mpns: string[];
+  /** رموز المنتج لدى متاجر محددة (ASIN، SKU) — يسجلها المشرف */
+  skus?: { storeId: string; value: string }[];
 };
 
 /**
@@ -54,6 +58,8 @@ export type CatalogIndex = {
   entries: IndexedEntry[];
   byGtin: Map<string, IndexedEntry[]>;
   byMpn: Map<string, IndexedEntry[]>;
+  /** "متجر|رمز" → المنتجات */
+  bySku: Map<string, IndexedEntry[]>;
   /** كلمة → المنتجات التي تحتويها */
   byToken: Map<string, Set<IndexedEntry>>;
 };
@@ -74,6 +80,7 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
 export function buildCatalogIndex(catalog: readonly CatalogEntry[]): CatalogIndex {
   const byGtin = new Map<string, IndexedEntry[]>();
   const byMpn = new Map<string, IndexedEntry[]>();
+  const bySku = new Map<string, IndexedEntry[]>();
   const byToken = new Map<string, Set<IndexedEntry>>();
   const entries: IndexedEntry[] = catalog.map((e) => {
     const indexedNames = e.names.map((n) => {
@@ -85,6 +92,7 @@ export function buildCatalogIndex(catalog: readonly CatalogEntry[]): CatalogInde
   for (const e of entries) {
     for (const g of e.gtins) push(byGtin, g, e);
     for (const m of e.mpns) push(byMpn, m, e);
+    for (const k of e.skus ?? []) push(bySku, skuKey(k.storeId, k.value), e);
     for (const n of e.indexedNames) {
       for (const t of n.tokens) {
         if (!byToken.has(t)) byToken.set(t, new Set());
@@ -92,7 +100,12 @@ export function buildCatalogIndex(catalog: readonly CatalogEntry[]): CatalogInde
       }
     }
   }
-  return { entries, byGtin, byMpn, byToken };
+  return { entries, byGtin, byMpn, bySku, byToken };
+}
+
+/** رمز المتجر يُقارن بلا حساسية لحالة الأحرف وبلا مسافات */
+export function skuKey(storeId: string, value: string): string {
+  return `${storeId.trim().toLowerCase()}|${value.trim().toUpperCase()}`;
 }
 
 function brandsConflict(offerBrandKey: string, entry: IndexedEntry): boolean {
@@ -122,6 +135,19 @@ const MAX_CANDIDATES_SCANNED = 400;
 
 export function matchOffer(offer: NormalizedOffer, index: CatalogIndex): MatchResult {
   const offerBrand = brandKey(offer.brand);
+
+  /* 0) رمز المنتج لدى المتجر نفسه */
+  if (offer.storeId && offer.externalId) {
+    const hits = index.bySku.get(skuKey(offer.storeId, offer.externalId)) ?? [];
+    if (hits.length === 1) return { status: "matched", method: "store_sku", productId: hits[0].id, label: hits[0].label };
+    if (hits.length > 1) {
+      return {
+        status: "needs_review",
+        reason: "رمز المتجر مسجّل لأكثر من منتج",
+        candidates: hits.map((e) => ({ productId: e.id, label: e.label, score: 1, reasons: ["رمز متجر مطابق"] })),
+      };
+    }
+  }
 
   /* 1) الباركود */
   if (offer.gtin) {

@@ -4,6 +4,7 @@ import { importLookups, listRuns } from "../../lib/admin/db";
 import { MVP_MAX_BYTES, MVP_MAX_ROWS } from "../../lib/admin/priceRows";
 import { stageCsv, stageFeedFile, stageSinglePrice } from "../actions";
 import AdminShell, { can, Field, Flash, inputCls, requireAdmin, SubmitButton } from "../_components/AdminShell";
+import ConnectorPanel from "./ConnectorPanel";
 
 type Props = { searchParams: Promise<{ ok?: string; err?: string }> };
 
@@ -137,6 +138,7 @@ export default async function PricesPage({ searchParams }: Props) {
           </section>
         </div>
       )}
+      {canImport && <ConnectorPanel claims={ctx.claims} />}
 
       <section className="card mt-6 overflow-hidden">
         <h2 className="p-5 pb-3 font-bold">آخر عمليات الاستيراد</h2>

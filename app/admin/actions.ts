@@ -37,7 +37,11 @@ import {
 } from "../lib/admin/db";
 import { feedSummary, feedToStageRows } from "../lib/admin/feedRows";
 import { draftRow, draftRowsFromCsv, MVP_MAX_BYTES, MVP_MAX_ROWS, type ProductRef } from "../lib/admin/priceRows";
-import { normalizeGtin, normalizeMpn } from "../lib/ingest/fields";
+import { normalizeIdentifier } from "../lib/admin/identifiers";
+import { AMAZON_STORE_ID } from "../lib/connectors/amazonCreators";
+import { ConnectorError } from "../lib/connectors/http";
+import { readiness } from "../lib/connectors/registry";
+import type { ConnectorSource, FetchedFeed } from "../lib/connectors/types";
 import { runImport } from "../lib/ingest/importer";
 import { buildCatalogIndex } from "../lib/ingest/matching";
 import type { FeedFormat } from "../lib/ingest/types";
@@ -129,22 +133,32 @@ export async function addProduct(fd: FormData) {
 export async function addProductIdentifier(fd: FormData) {
   const claims = await claimsOrLogin();
   const productId = Number(text(fd, "productId", 20));
-  const kind = text(fd, "kind", 10) === "mpn" ? "mpn" : "gtin";
+  const kindRaw = text(fd, "kind", 12);
+  const kind = kindRaw === "mpn" ? "mpn" : kindRaw === "store_sku" ? "store_sku" : "gtin";
   const raw = text(fd, "value", 80);
-  const norm = kind === "gtin" ? normalizeGtin(raw) : normalizeMpn(raw);
-  const value = norm && (kind === "gtin" || /^[A-Z0-9]{3,64}$/.test(norm)) ? norm : null;
+  const storeId = kind === "store_sku" ? text(fd, "storeId", 60) : "";
+  const value = normalizeIdentifier(kind, raw);
   if (!Number.isSafeInteger(productId) || productId <= 0) back("/admin/catalog", "err", "اختر منتجًا");
+  if (kind === "store_sku" && !storeId) back("/admin/catalog", "err", "اختر المتجر الذي يخصه رمز المنتج");
   if (!value) {
     back("/admin/catalog", "err", kind === "gtin"
       ? "الباركود غير صالح: يجب أن يكون 8 أو 12 أو 13 أو 14 رقمًا برقم تحقق صحيح"
-      : "رقم الموديل غير صالح: أحرف لاتينية وأرقام فقط (3-64)");
+      : kind === "mpn"
+      ? "رقم الموديل غير صالح: أحرف لاتينية وأرقام فقط (3-64)"
+      : storeId === AMAZON_STORE_ID
+      ? "رمز ASIN غير صالح: 10 أحرف لاتينية وأرقام (مثل B0XXXXXXXX)"
+      : "رمز المتجر غير صالح: أحرف لاتينية وأرقام و . _ - فقط (حتى 64)");
+  }
+  if (kind === "store_sku" && storeId === AMAZON_STORE_ID && !/^[A-Z0-9]{10}$/.test(value)) {
+    back("/admin/catalog", "err", "رمز ASIN غير صالح: 10 أحرف لاتينية وأرقام (مثل B0XXXXXXXX)");
   }
   try {
-    await addIdentifier(claims, { productId, kind, value });
+    await addIdentifier(claims, { productId, kind, value, storeId: storeId || undefined });
   } catch (e) {
     back("/admin/catalog", "err", friendlyDbError(e));
   }
-  back("/admin/catalog", "ok", `أُضيف ${kind === "gtin" ? "الباركود" : "رقم الموديل"} ${value}. ملفات الشركاء ستطابق هذا المنتج تلقائيًا.`);
+  const label = kind === "gtin" ? "الباركود" : kind === "mpn" ? "رقم الموديل" : `رمز ${storeId}`;
+  back("/admin/catalog", "ok", `أُضيف ${label} ${value}. ملفات الشركاء والموصّلات ستطابق هذا المنتج تلقائيًا.`);
 }
 
 export async function deleteProductIdentifier(fd: FormData) {
@@ -237,7 +251,8 @@ export async function addStore(fd: FormData) {
 
 export async function addSource(fd: FormData) {
   const claims = await claimsOrLogin();
-  const kind = text(fd, "kind", 30) === "store_feed" ? "store_feed" : "manual_upload";
+  const kindRaw = text(fd, "kind", 30);
+  const kind = (["store_feed", "affiliate_feed", "official_api"] as const).find((k) => k === kindRaw) ?? "manual_upload";
   const basis = text(fd, "permissionBasis", 500);
   if (!basis) back("/admin/stores", "err", "اذكر أساس الإذن باستخدام بيانات هذا المصدر");
   try {
@@ -246,6 +261,8 @@ export async function addSource(fd: FormData) {
       name: text(fd, "name", 120),
       kind,
       storeId: text(fd, "storeId", 60) || undefined,
+      networkId: text(fd, "networkId", 60) || undefined,
+      allowAutomated: fd.get("allowAutomated") === "on",
       permissionBasis: basis,
       evidenceUrl: text(fd, "evidenceUrl", 500) || undefined,
       approve: fd.get("approve") === "on",
@@ -348,53 +365,104 @@ export async function stageFeedFile(fd: FormData) {
   }
   const content = await file.text();
   const fileName = file.name.slice(0, 200) || "feed";
-
   const ctx = await feedContext(claims, sourceId);
   if (!ctx.source) back("/admin/prices", "err", "المصدر غير موجود أو غير معتمد لرفع الملفات");
   const timeZone = text(fd, "timeZone", 60) || ctx.source.timeZone || "Asia/Riyadh";
+  const out = await stageFeedContent(claims, ctx, { fileName, content, format, timeZone, limits: { maxRows: MVP_MAX_ROWS, maxBytes: MVP_MAX_BYTES } });
+  if (!out.ok) back("/admin/prices", "err", out.message);
+  back(`/admin/prices/${out.runId}`, "ok", out.summary);
+}
 
+type FeedCtx = Awaited<ReturnType<typeof feedContext>>;
+
+/**
+ * المسار المشترك لكل ملف (رفع يدوي أو جلب من موصّل): تحليل ← مطابقة بمعرّف قاطع ←
+ * معاينة مختومة. لا يُعتمد شيء هنا: الاعتماد والمراجعة خطوتان بشريتان منفصلتان.
+ */
+async function stageFeedContent(
+  claims: Awaited<ReturnType<typeof claimsOrLogin>>,
+  ctx: FeedCtx,
+  input: { fileName: string; content: string; format: FeedFormat | "auto"; timeZone: string; limits: { maxRows: number; maxBytes: number } }
+): Promise<{ ok: true; runId: string; summary: string } | { ok: false; message: string }> {
+  const source = ctx.source!;
   const result = runImport({
     source: {
-      id: ctx.source.id,
-      name: ctx.source.name,
-      kind: ctx.source.kind === "store_feed" ? "store_feed" : "manual_upload",
-      storeId: ctx.source.storeId ?? undefined,
-      defaultCurrency: ctx.source.defaultCurrency ?? undefined,
-      timeZone,
-      columnMap: ctx.source.columnMap,
+      id: source.id,
+      name: source.name,
+      kind: source.kind === "manual_upload" ? "manual_upload" : source.kind === "affiliate_feed" ? "affiliate_network" : "store_feed",
+      network: source.networkId ?? undefined,
+      storeId: source.storeId ?? undefined,
+      defaultCurrency: source.defaultCurrency ?? undefined,
+      timeZone: input.timeZone,
+      columnMap: source.columnMap,
     },
-    fileName,
-    content,
-    format,
+    fileName: input.fileName,
+    content: input.content,
+    format: input.format,
     catalog: buildCatalogIndex(ctx.catalog),
     importedAt: new Date().toISOString(),
-    limits: { maxRows: MVP_MAX_ROWS, maxBytes: MVP_MAX_BYTES, maxDurationMs: 10_000 },
+    limits: { ...input.limits, maxDurationMs: 10_000 },
     registry: ctx.registry,
     approvedAliases: ctx.approvedAliases,
   });
-  if (result.fatal) back("/admin/prices", "err", `لم يُستورد شيء: ${result.fatal.message}`);
+  if (result.fatal) return { ok: false, message: `لم يُستورد شيء: ${result.fatal.message}` };
 
   const staged = feedToStageRows(result, { activeStores: ctx.activeStores });
   if (staged.rows.length === 0) {
     const hint = ctx.identifiedProducts === 0
-      ? " لا يوجد أي منتج له باركود أو رقم موديل بعد: أضفها من صفحة الكتالوج ليُطابَق الملف تلقائيًا."
+      ? " لا يوجد أي منتج له باركود أو رقم موديل أو رمز متجر بعد: أضفها من صفحة الكتالوج ليُطابَق الملف تلقائيًا."
       : "";
     const first = staged.issues.slice(0, 3).map((i) => (i.row ? `صف ${i.row}: ${i.message}` : i.message)).join(" · ");
-    back("/admin/prices", "err", `لا يوجد صف قابل للرفع. ${feedSummary(staged.counts)}.${hint} ${first}`.slice(0, 1500));
+    return { ok: false, message: `لا يوجد صف قابل للرفع. ${feedSummary(staged.counts)}.${hint} ${first}`.slice(0, 1500) };
   }
-  let runId: string;
   try {
-    ({ runId } = await stageFeed(claims, {
-      sourceId: ctx.source.id,
-      fileName,
+    const { runId } = await stageFeed(claims, {
+      sourceId: source.id,
+      fileName: input.fileName,
       format: result.format ?? "csv",
-      content,
+      content: input.content,
       staged,
-    }));
+    });
+    return { ok: true, runId, summary: feedSummary(staged.counts) };
   } catch (e) {
-    back("/admin/prices", "err", friendlyDbError(e));
+    return { ok: false, message: friendlyDbError(e) };
   }
-  back(`/admin/prices/${runId}`, "ok", feedSummary(staged.counts));
+}
+
+/** حدود ملفات الموصّلات: الملف قد يكون كبيرًا، لكن لا يُرفع منه إلا المطابق بمعرّف قاطع */
+const CONNECTOR_LIMITS = { maxRows: 50_000, maxBytes: 25 * 1024 * 1024 };
+
+/**
+ * جلب الآن من مصدر معتمد (أمازون / ملف شبكة عمولة / ملف متجر) — بطلب من المشرف فقط.
+ * النتيجة معاينة مختومة مثل الرفع اليدوي تمامًا، ولا يظهر أي سعر قبل الاعتماد والمراجعة.
+ */
+export async function runSourceConnector(fd: FormData) {
+  const claims = await claimsOrLogin();
+  const sourceId = text(fd, "sourceId", 60);
+  const ctx = await feedContext(claims, sourceId);
+  if (!ctx.source) back("/admin/prices", "err", "المصدر غير موجود أو غير معتمد");
+  const source: ConnectorSource = {
+    id: ctx.source.id, name: ctx.source.name, kind: ctx.source.kind, storeId: ctx.source.storeId,
+    networkId: ctx.source.networkId ?? null, status: "approved", allowAutomated: !!ctx.source.allowAutomated,
+  };
+  const ready = readiness(source, process.env);
+  if (!ready.ready) {
+    back("/admin/prices", "err", `لا يمكن الجلب من ${source.name}: ${ready.reason}${ready.missing?.length ? ` (${ready.missing.join("، ")})` : ""}`);
+  }
+  let feed: FetchedFeed;
+  try {
+    feed = await ready.connector.run({ source, env: process.env, storeSkus: ctx.storeSkus, maxBytes: CONNECTOR_LIMITS.maxBytes });
+  } catch (e) {
+    const m = e instanceof ConnectorError ? `${e.message} (${e.code})` : "تعذّر الجلب من المصدر";
+    back("/admin/prices", "err", `${source.name}: ${m}`);
+  }
+  const out = await stageFeedContent(claims, ctx, {
+    fileName: feed.fileName, content: feed.content, format: feed.format,
+    timeZone: ctx.source.timeZone || "Asia/Riyadh", limits: CONNECTOR_LIMITS,
+  });
+  const fetched = Object.entries(feed.meta).map(([k, v]) => `${k}: ${v}`).join("، ");
+  if (!out.ok) back("/admin/prices", "err", `${source.name} — جُلب (${fetched}) لكن: ${out.message}`.slice(0, 1500));
+  back(`/admin/prices/${out.runId}`, "ok", `${source.name} — ${out.summary}`);
 }
 
 export async function commitRun(fd: FormData) {
